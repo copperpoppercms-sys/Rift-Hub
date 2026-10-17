@@ -15,7 +15,7 @@ if not luau or not compiler:
     raise SystemExit('Install Luau or set LUAU_BIN and LUAU_COMPILE_BIN.')
 hub = (root / 'src/ui/Hub.lua').read_text()
 assert 'label = "Hub", icon = "hub"' in hub
-assert 'Size = UDim2.fromOffset(320, 168)' in hub
+assert 'Size = UDim2.fromOffset(320, 144)' in hub
 assert 'Size = UDim2.fromOffset(40, 40)' in hub
 with tempfile.TemporaryDirectory() as directory:
     directory = Path(directory)

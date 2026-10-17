@@ -524,7 +524,7 @@ local function playVideo(opts, frameCount, frameContents, soundId, laughSoundId,
 		TextColor3 = Color3.new(1, 1, 1),
 		TextTransparency = 1,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Text = "X E N O   H U B",
+		Text = "R I F T   H U B",
 		ZIndex = 5,
 		Parent = gui,
 	})

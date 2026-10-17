@@ -188,7 +188,7 @@ local function buildHub(panel, ctx)
 	local library = ctx.GameLibrary(ctx)
 	for order, item in ipairs(library.Games) do
 		local tile = Kit.create("Frame", {
-			Name = item.Id, LayoutOrder = order + 1, Size = UDim2.fromOffset(320, 168),
+			Name = item.Id, LayoutOrder = order + 1, Size = UDim2.fromOffset(320, 144),
 			BackgroundColor3 = Kit.PANEL, BorderSizePixel = 0,
 		}, scroller)
 		Kit.create("UICorner", { CornerRadius = UDim.new(0, 12) }, tile)
@@ -210,29 +210,18 @@ local function buildHub(panel, ctx)
 			FontFace = Kit.face("BuilderSans"), TextSize = 11, TextColor3 = Kit.SUB,
 			TextXAlignment = Enum.TextXAlignment.Left, Text = item.ScriptName,
 		}, tile)
-		local link = Kit.create("TextButton", {
-			Position = UDim2.fromOffset(14, 64), Size = UDim2.new(1, -28, 0, 28), BackgroundTransparency = 1,
-			FontFace = Kit.face("BuilderSans"), TextSize = 9, TextColor3 = Kit.SUB, TextWrapped = true,
-			TextXAlignment = Enum.TextXAlignment.Left, Text = item.Url, AutoButtonColor = false,
-		}, tile)
 		local execute = Kit.create("TextButton", {
-			Position = UDim2.fromOffset(14, 100), Size = UDim2.fromOffset(94, 30),
+			Position = UDim2.fromOffset(14, 66), Size = UDim2.fromOffset(94, 30),
 			BackgroundColor3 = Kit.ACCENT, BorderSizePixel = 0, AutoButtonColor = false,
 			FontFace = Kit.face("BuilderSans", Enum.FontWeight.Medium), TextSize = 12, TextColor3 = Kit.INK, Text = "Execute",
 		}, tile)
 		Kit.create("UICorner", { CornerRadius = UDim.new(0, 7) }, execute)
 		local status = Kit.create("TextLabel", {
-			Position = UDim2.fromOffset(14, 138), Size = UDim2.new(1, -28, 0, 18), BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(14, 110), Size = UDim2.new(1, -28, 0, 18), BackgroundTransparency = 1,
 			FontFace = Kit.face("BuilderSans"), TextSize = 10, TextColor3 = Kit.FAINT,
-			TextXAlignment = Enum.TextXAlignment.Left, Text = "Opens MM2 and closes this hub",
+			TextXAlignment = Enum.TextXAlignment.Left, Text = "Opens MM2 and closes hub",
 		}, tile)
 		local loading = false
-		ctx.Janitor.add(link.Activated:Connect(function()
-			if type(setclipboard) == "function" then
-				local copied = pcall(setclipboard, item.Url)
-				if copied then status.Text = "Script link copied" end
-			end
-		end))
 		ctx.Janitor.add(execute.Activated:Connect(function()
 			if loading then return end
 			loading = true; execute.Text = "Loading…"
