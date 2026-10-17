@@ -329,342 +329,692 @@ local function heroLabel(name, kind)
 end
 -- END HERO RESOLVER
 
-local API = { Version = "3.0", HeroColors = HERO_COLORS }
-local gui = own(create("ScreenGui", {Name="RiftSHA_Hub",IgnoreGuiInset=true,ResetOnSpawn=false,DisplayOrder=900,ZIndexBehavior=Enum.ZIndexBehavior.Sibling}))
+local API = { Version = "2.13", HeroColors = HERO_COLORS }
+local gui = own(create("ScreenGui", { Name = "RiftSHA_Hub", IgnoreGuiInset = true, ResetOnSpawn = false,
+	DisplayOrder = 900, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }))
 do
-	local ok=pcall(function() gui.Parent=type(gethui)=="function" and gethui() or CoreGui end)
-	if not ok or not gui.Parent then gui.Parent=LocalPlayer:WaitForChild("PlayerGui") end
+	local ok = pcall(function() gui.Parent = type(gethui) == "function" and gethui() or CoreGui end)
+	if not ok or not gui.Parent then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 end
-local overlay=own(create("Folder",{Name="RiftSHA_World"},workspace))
-local minimized,focused=false,true
-local statusLabel
-local function status(value) API.Status=value; if statusLabel then statusLabel.Text=value end end
-local Config={Aura=false,Burst=false,Face=false,Chase=false,AuraRange=8,ChaseRange=180,
-	Hitbox=false,HitboxSize=6,AutoSkills=false,SkillInterval=1,SkillSlots={true,false,true,false},
-	AutoDash=false,DashInterval=1,AirJump=false,Speed=false,SpeedValue=32,
-	ESP=false,Highlights=false,Fullbright=false}
-API.Config=Config
-local function body(plr)
-	local char=plr and plr.Character
-	local hum=char and char:FindFirstChildOfClass("Humanoid")
-	local root=char and char:FindFirstChild("HumanoidRootPart")
-	if char and char.Parent and hum and hum.Health>0 and root and root:IsA("BasePart") then return char,hum,root end
-end
-local function active()
-	return alive and focused and minimized and not Input:GetFocusedTextBox() and body(LocalPlayer)~=nil
-end
-local Controls={List={},Age=10,Hero=nil,Skills={},Profile="None"}
-local vim; pcall(function() vim=game:GetService("VirtualInputManager") end)
-local held={}
-local function release(press)
-	if not held[press] then return end
-	held[press]=nil
-	pcall(function()
-		if press.Key then vim:SendKeyEvent(false,press.Key,false,game)
-		else vim:SendMouseButtonEvent(press.X,press.Y,0,false,game,0) end
-	end)
-end
-local function releaseAll() for press in pairs(held) do release(press) end end
-local function keyPulse(key)
-	if not vim then return false,"Virtual input unavailable" end
-	for press in pairs(held) do if press.Key==key then release(press) end end
-	local ok=pcall(function() vim:SendKeyEvent(true,key,false,game) end)
-	if not ok then return false,"Game key input unavailable" end
-	local press={Key=key}; held[press]=true
-	task.delay(0.05,function() release(press) end)
-	return true
-end
-local function visible(button)
-	if not button.Parent then return false end
-	local p=button
-	while p do
-		if p:IsA("GuiObject") and not p.Visible then return false end
-		if p:IsA("ScreenGui") and not p.Enabled then return false end
-		p=p.Parent
+local espGui = own(create("ScreenGui", { Name = "RiftSHA_ESP", IgnoreGuiInset = true, ResetOnSpawn = false,
+	DisplayOrder = 850, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, gui.Parent))
+local overlay = own(create("Folder", { Name = "RiftSHA_World" }, workspace))
+local ESP = { Config = { Enabled = false, ShowName = true, ShowCharacter = true, Box = true,
+	Tracer = false, Distance = true, FillTransparency = 0.72, MaxDistance = 1500 } }
+API.ESP = ESP
+local rows = {}
+
+-- Simple local noclip. Preserve each part's original collision state.
+local Movement = (function()
+	local M = { Enabled = false }
+	local originals = {}
+	local function restore(part, value)
+		pcall(function() part.CanCollide = value end)
+		originals[part] = nil
 	end
-	return true
-end
-local slotNames={primaryskill=1,secondaryskill=2,tertiaryskill=3,quaternaryskill=4,skill1=1,skill2=2,skill3=3,skill4=4,ability1=1,ability2=2,ability3=3,ability4=4}
-local function scanControls()
-	Controls.List={}; Controls.Age=0
-	local pg=LocalPlayer:FindFirstChild("PlayerGui")
-	if not pg then return end
-	for i,button in ipairs(pg:GetDescendants()) do
-		if i>3000 then break end
-		if button:IsA("GuiButton") and not button:IsDescendantOf(gui) and visible(button) then
-			local item={Button=button,Words={}}
-			item.Words[normalize(button.Name)]=true
-			if button:IsA("TextButton") then item.Words[normalize(button.Text)]=true end
-			item.Name=button:GetAttribute("SkillName") or button:GetAttribute("AbilityName")
-			local key=button:GetAttribute("KeyCode") or button:GetAttribute("Keybind")
-			if type(key)=="string" then pcall(function() item.Key=Enum.KeyCode[key] end) end
-			item.Slot=tonumber(button:GetAttribute("AbilitySlot") or button:GetAttribute("SkillSlot")) or slotNames[normalize(button.Name)]
-			for _,child in ipairs(button:GetDescendants()) do
-				if child:IsA("TextLabel") then
-					item.Words[normalize(child.Text)]=true
-					if normalize(child.Name)=="skillname" or normalize(child.Name)=="abilityname" then item.Name=child.Text end
-				end
+	local function restoreAll()
+		for part, value in pairs(originals) do restore(part, value) end
+	end
+	function M.Step()
+		local character = LocalPlayer.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if not alive or not M.Enabled or not character or not character.Parent or not humanoid or humanoid.Health <= 0 then
+			restoreAll()
+			return
+		end
+		-- Restore old bodies and accessories that have left the current character.
+		for part, value in pairs(originals) do
+			if not part:IsDescendantOf(character) then restore(part, value) end
+		end
+		for _, part in ipairs(character:GetDescendants()) do
+			if part:IsA("BasePart") then
+				if originals[part] == nil then originals[part] = part.CanCollide end
+				part.CanCollide = false
 			end
-			if type(item.Name)=="string" then item.Words[normalize(item.Name)]=true else item.Name=nil end
-			table.insert(Controls.List,item)
 		end
 	end
-end
-local function findControl(names)
-	local found
-	for _,item in ipairs(Controls.List) do
-		local match=false
-		for _,name in ipairs(names) do if item.Words[normalize(name)] then match=true; break end end
-		if match and visible(item.Button) then if found and found.Button~=item.Button then return nil,"Ambiguous game control" end; found=item end
+	function M.SetEnabled(value)
+		M.Enabled = alive and value == true
+		M.Step()
 	end
-	return found
-end
-local function fireControl(item)
-	local button=item and item.Button
-	if not button or not visible(button) then return false,"Game control not found" end
-	if button:GetAttribute("OnCooldown")==true or button:GetAttribute("Ready")==false or (tonumber(button:GetAttribute("CooldownRemaining")) or 0)>0 then return false,"Cooldown" end
-	if type(firesignal)=="function" then
-		local event=button.Activated
-		if type(getconnections)=="function" then
-			local ok,a=pcall(getconnections,event); local ok2,c=pcall(getconnections,button.MouseButton1Click)
-			if ok and ok2 then
-				if #a==0 and #c>0 then event=button.MouseButton1Click
-				elseif #a==0 and #c==0 then
-					if item.Key then return keyPulse(item.Key) end
-					return false,"Game control has no readable input handler"
-				end
+	function M.Cleanup()
+		M.Enabled = false
+		restoreAll()
+	end
+	return M
+end)()
+API.Movement = Movement
+
+-- Camera-based target assistance. Native abilities keep their own aiming rules.
+local Aim = (function()
+	local A = { Config = { Enabled = false, HoldToLock = false, Sticky = true,
+		TeamCheck = true, WallCheck = true, ShowRadius = true, ShowPanel = true,
+		MaxRange = 350, Radius = 180, Responsiveness = 14, Prediction = 0,
+		Priority = "Crosshair", AimPart = "Body" }, Target = nil, Focused = true }
+	local mouseHold, touchHold, elapsed = nil, nil, 0
+	local hint = "Enable lock-on in Abilities"
+	local ring = create("Frame", { Name = "RiftSHA_AimRadius", AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1, Visible = false }, espGui)
+	corner(ring, 1000); border(ring, C.accent, 0.55)
+	local targetGlow = create("Highlight", { Name = "RiftSHA_LockHighlight", Enabled = false,
+		DepthMode = Enum.HighlightDepthMode.Occluded, FillTransparency = 0.9,
+		OutlineTransparency = 0, FillColor = C.accent, OutlineColor = C.accent }, overlay)
+	local panel = create("Frame", { Name = "RiftSHA_TargetPanel", AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 24), Size = UDim2.new(0, 286, 0, 78),
+		BackgroundColor3 = C.panel, BorderSizePixel = 0, Visible = false }, espGui)
+	corner(panel, 12); border(panel, C.accent, 0.5)
+	local title = text(panel, "NO TARGET", 11, C.accent, UDim2.fromOffset(13, 9), UDim2.new(1, -26, 0, 18), true)
+	local detail = text(panel, "", 10, C.sub, UDim2.fromOffset(13, 29), UDim2.new(1, -26, 0, 18))
+	local rail = create("Frame", { Position = UDim2.fromOffset(13, 59), Size = UDim2.new(1, -26, 0, 4),
+		BackgroundColor3 = C.border, BorderSizePixel = 0 }, panel); corner(rail, 3)
+	local health = create("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = C.green, BorderSizePixel = 0 }, rail); corner(health, 3)
+	local hold = create("TextButton", { Name = "RiftSHA_HoldLock", AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -24, 1, -110), Size = UDim2.fromOffset(94, 48), BackgroundColor3 = C.panel,
+		Text = "HOLD LOCK", Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = C.accent,
+		AutoButtonColor = false, BorderSizePixel = 0, Visible = false }, gui)
+	corner(hold, 12); border(hold, C.accent, 0.4)
+	local function body(plr)
+		local char = plr and plr.Character
+		local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+		local rootPart = char and char:FindFirstChild("HumanoidRootPart")
+		if not char or not char.Parent or not humanoid or humanoid.Health <= 0 or not rootPart or not rootPart:IsA("BasePart") then return end
+		return char, humanoid, rootPart
+	end
+	local function clearTarget()
+		A.Target = nil; targetGlow.Enabled = false; targetGlow.Adornee = nil
+	end
+	local function active()
+		return alive and A.Config.Enabled and A.Focused and not Input:GetFocusedTextBox()
+			and (not A.Config.HoldToLock or mouseHold ~= nil or touchHold ~= nil)
+	end
+	local function inspect(plr, camera, localRoot)
+		if plr == LocalPlayer or plr.Parent ~= Players then return end
+		if A.Config.TeamCheck and LocalPlayer.Team and plr.Team == LocalPlayer.Team and not LocalPlayer.Neutral and not plr.Neutral then return end
+		local char, humanoid, rootPart = body(plr)
+		if not char then return end
+		local part = (A.Config.AimPart == "Head" and char:FindFirstChild("Head"))
+			or char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or rootPart
+		if not part:IsA("BasePart") then part = rootPart end
+		local distance = (rootPart.Position-localRoot.Position).Magnitude
+		if distance > A.Config.MaxRange then return end
+		local screen, onScreen = camera:WorldToViewportPoint(part.Position)
+		if not onScreen or screen.Z <= 0 then return end
+		local pixels = (Vector2.new(screen.X, screen.Y)-camera.ViewportSize*0.5).Magnitude
+		if pixels > A.Config.Radius then return end
+		if A.Config.WallCheck then
+			local params = RaycastParams.new()
+			params.FilterType = Enum.RaycastFilterType.Exclude
+			params.FilterDescendantsInstances = { LocalPlayer.Character }
+			params.IgnoreWater = true
+			local hit = workspace:Raycast(camera.CFrame.Position, part.Position-camera.CFrame.Position, params)
+			if hit and not hit.Instance:IsDescendantOf(char) then return end
+		end
+		return { Player = plr, Character = char, Humanoid = humanoid, Part = part, Distance = distance,
+			Score = A.Config.Priority == "Nearest" and distance or A.Config.Priority == "Lowest health" and humanoid.Health or pixels }
+	end
+	local function candidates(camera, localRoot)
+		local found = {}
+		for _, plr in ipairs(Players:GetPlayers()) do
+			local candidate = inspect(plr, camera, localRoot)
+			if candidate then table.insert(found, candidate) end
+		end
+		table.sort(found, function(a, b)
+			if a.Score == b.Score then return a.Player.UserId < b.Player.UserId end
+			return a.Score < b.Score
+		end)
+		return found
+	end
+	function A.Cycle()
+		if not active() then return end
+		local _, _, rootPart = body(LocalPlayer)
+		local camera = workspace.CurrentCamera
+		if not camera or camera.CameraType == Enum.CameraType.Scriptable or not rootPart then clearTarget(); return end
+		local found = candidates(camera, rootPart)
+		if #found == 0 then clearTarget(); return end
+		local index = 0
+		for i, item in ipairs(found) do if item.Player == A.Target then index = i; break end end
+		A.Target = found[index % #found+1].Player
+	end
+	function A.SetEnabled(value)
+		A.Config.Enabled = alive and value == true
+		clearTarget(); mouseHold = nil; touchHold = nil
+		if not A.Config.Enabled then ring.Visible = false; panel.Visible = false; hold.Visible = false end
+		if A.OnChanged then A.OnChanged() end
+	end
+	function A.Release()
+		mouseHold = nil; touchHold = nil; clearTarget()
+		ring.Visible = false; panel.Visible = false; hold.Visible = false
+	end
+	function A.Cleanup() A.OnChanged = nil; A.OnStatus = nil; A.SetEnabled(false); A.Release() end
+	function A.Step(dt)
+		dt = math.clamp(tonumber(dt) or 1/60, 0, 0.1)
+		elapsed += dt
+		local camera = workspace.CurrentCamera
+		local _, _, localRoot = body(LocalPlayer)
+		local available = alive and A.Config.Enabled and A.Focused and not Input:GetFocusedTextBox()
+			and camera and camera.CameraType ~= Enum.CameraType.Scriptable and localRoot
+		hold.Visible = available and A.Config.HoldToLock or false
+		ring.Visible = available and A.Config.ShowRadius or false
+		panel.Visible = available and A.Config.ShowPanel or false
+		if camera then
+			ring.Position = UDim2.fromOffset(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
+			ring.Size = UDim2.fromOffset(A.Config.Radius*2, A.Config.Radius*2)
+			panel.Size = UDim2.fromOffset(math.min(286, math.max(1, camera.ViewportSize.X-24)), 78)
+		end
+		local target
+		if available and active() then
+			if A.Config.Sticky and A.Target then target = inspect(A.Target, camera, localRoot) end
+			if not target then target = candidates(camera, localRoot)[1] end
+		end
+		if target then
+			A.Target = target.Player
+			targetGlow.Adornee = target.Character; targetGlow.Enabled = true
+			local offset = target.Part.AssemblyLinearVelocity*A.Config.Prediction
+			if offset.Magnitude > 25 then offset = offset.Unit*25 end
+			local point = target.Part.Position+offset
+			if (point-camera.CFrame.Position).Magnitude > 0.05 then
+				camera.CFrame = camera.CFrame:Lerp(CFrame.lookAt(camera.CFrame.Position, point), 1-math.exp(-A.Config.Responsiveness*dt))
 			end
+			hint = "Locked on @" .. target.Player.Name
+			if elapsed >= 0.1 then
+				local hero, kind = roleFor(target.Player)
+				title.Text = "@" .. target.Player.Name
+				detail.Text = string.format("%s  ·  %d studs  ·  %d HP", hero and heroLabel(hero, kind) or "Hero not detected", math.floor(target.Distance), math.ceil(target.Humanoid.Health))
+				health.Size = UDim2.fromScale(math.clamp(target.Humanoid.Health/math.max(1, target.Humanoid.MaxHealth), 0, 1), 1)
+			end
+		else
+			clearTarget()
+			hint = not A.Config.Enabled and "Lock-on off" or not available and "Paused" or not active() and "Hold right mouse or HOLD LOCK" or "No eligible target in range"
+			title.Text = "NO TARGET"; detail.Text = hint; health.Size = UDim2.fromScale(0, 1)
+		end
+		if elapsed >= 0.1 then elapsed = 0; if A.OnStatus then A.OnStatus(hint) end end
+	end
+	connect(hold.InputBegan, function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			if A.Config.Enabled and A.Config.HoldToLock then touchHold = input end
+		end
+	end)
+	connect(Input.InputBegan, function(input, processed)
+		if processed or not A.Focused or Input:GetFocusedTextBox() then return end
+		if input.UserInputType == Enum.UserInputType.MouseButton2 then mouseHold = input end
+		if input.KeyCode == Enum.KeyCode.L then A.SetEnabled(not A.Config.Enabled)
+		elseif input.KeyCode == Enum.KeyCode.T then A.Cycle() end
+	end)
+	connect(Input.InputEnded, function(input)
+		if input == mouseHold then mouseHold = nil end
+		if input == touchHold then touchHold = nil end
+	end)
+	connect(Input.WindowFocusReleased, function() A.Focused = false; A.Release() end)
+	connect(Input.WindowFocused, function() A.Focused = true end)
+	connect(Players.PlayerRemoving, function(plr) if A.Target == plr then clearTarget() end end)
+	return A
+end)()
+API.Aim = Aim
+
+-- Uses normal game controls; damage and rewards remain server decisions.
+local Automation = (function()
+	local M = { Config = { Mode = "Off", AttackMethod = "HUD attack", AttackKey = "",
+		AttackRange = 8, SearchRange = 250, Interval = 0.4, AbilityInterval = 1,
+		Abilities = false, TeamCheck = true, WallCheck = true, LowHealth = 15,
+		Priority = "Nearest", FarmName = "", Keys = {} }, Status = "Off", Target = nil, InputsSent = 0, Focused = true }
+	local elapsed, attackClock, abilityClock, npcClock, index = 0, 0, 0, 10, 0
+	local npcs, held, walker = {}, nil, nil
+	local vim; pcall(function() vim = game:GetService("VirtualInputManager") end)
+	local function status(value) M.Status = value; if M.OnStatus then M.OnStatus(value) end end
+	local function release()
+		if held then local key=held.Key; held=nil; pcall(function() vim:SendKeyEvent(false, key, false, game) end) end
+	end
+	local function stopWalking()
+		if walker and walker.Parent then
+			local rootPart=walker.Parent:FindFirstChild("HumanoidRootPart")
+			if rootPart then pcall(function() walker:MoveTo(rootPart.Position) end) end
+		end
+		walker=nil
+	end
+	function M.Pause() release(); stopWalking(); M.Target=nil; attackClock=0; abilityClock=0 end
+	function M.SetMode(mode)
+		if mode ~= "Off" and mode ~= "Aura" and mode ~= "Fight" and mode ~= "Farm" then return false end
+		M.Pause(); M.Config.Mode=alive and mode or "Off"; status(M.Config.Mode == "Off" and "Off" or "Ready · minimize hub to start")
+		if M.OnChanged then M.OnChanged() end
+		return true
+	end
+	local digits = { ["1"]="One",["2"]="Two",["3"]="Three",["4"]="Four",["5"]="Five",["6"]="Six",["7"]="Seven",["8"]="Eight",["9"]="Nine",["0"]="Zero" }
+	function M.ParseKeys(value)
+		local keys = {}
+		for word in tostring(value):gmatch("[^,%s]+") do
+			if #keys >= 8 then return nil end
+			local keyName=digits[word] or (#word==1 and word:upper() or word)
+			local ok,key=pcall(function() return Enum.KeyCode[keyName] end)
+			if not ok or not key or key == Enum.KeyCode.Unknown or key == Enum.KeyCode.L or key == Enum.KeyCode.T or key == Enum.KeyCode.RightShift or key == Enum.KeyCode.F8 then return nil end
+			table.insert(keys,key)
+		end
+		return keys
+	end
+	local function visible(button)
+		local parent=button
+		while parent do
+			if parent:IsA("GuiObject") and not parent.Visible then return false end
+			if parent:IsA("ScreenGui") and not parent.Enabled then return false end
+			parent=parent.Parent
+		end
+		return button.Parent ~= nil
+	end
+	local attackNames = {attack=true,attackbutton=true,punch=true,punchbutton=true,m1=true,m1button=true,primaryattack=true,basicattack=true}
+	function M.FindAttackButton()
+		local pg=LocalPlayer:FindFirstChild("PlayerGui")
+		if not pg then return end
+		local best, score, ambiguous = nil,0,false
+		for i, button in ipairs(pg:GetDescendants()) do
+			if i>2500 then break end
+			if button:IsA("GuiButton") and not button:IsDescendantOf(gui) and visible(button) then
+				local weight=attackNames[normalize(button.Name)] and 2 or 0
+				if button:IsA("TextButton") and attackNames[normalize(button.Text)] then weight+=1 end
+				for _,child in ipairs(button:GetChildren()) do
+					if child:IsA("TextLabel") and attackNames[normalize(child.Text)] then weight+=1; break end
+				end
+				if weight>score then best=button; score=weight; ambiguous=false
+				elseif weight>0 and weight==score then ambiguous=true end
+			end
+		end
+		return not ambiguous and best or nil
+	end
+	local function pulseKey(key)
+		if not vim then return false,"Virtual input unavailable" end
+		release()
+		local ok=pcall(function() vim:SendKeyEvent(true,key,false,game) end)
+		if not ok then return false,"Key press rejected by executor" end
+		local press={Key=key}; held=press
+		task.delay(0.05,function() if held==press then release() end end)
+		return true
+	end
+	local cachedButton, buttonClock = nil,10
+	local function attack()
+		if M.Config.AttackMethod=="Equipped tool" then
+			local tool=LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+			if not tool then return false,"Equip an attack tool first" end
+			local ok=pcall(function() tool:Activate() end)
+			return ok,ok and nil or "Tool activation failed"
+		elseif M.Config.AttackMethod=="Keyboard key" then
+			local keys=M.ParseKeys(M.Config.AttackKey)
+			if not keys or #keys~=1 then return false,"Assign one attack key in Combat" end
+			return pulseKey(keys[1])
+		end
+		if not cachedButton or not visible(cachedButton) or buttonClock>=2 then cachedButton=M.FindAttackButton(); buttonClock=0 end
+		if not cachedButton then return false,"No unambiguous Attack button · choose tool or keyboard method" end
+		if type(firesignal)~="function" then return false,"HUD activation unavailable · choose tool or keyboard method" end
+		local event=cachedButton.Activated
+		if type(getconnections)=="function" then
+			local ok, clicks=pcall(getconnections,cachedButton.MouseButton1Click)
+			local ok2, activations=pcall(getconnections,event)
+			if ok and ok2 and #clicks>0 and #activations==0 then event=cachedButton.MouseButton1Click end
 		end
 		local ok=pcall(firesignal,event)
-		if ok then return true end
+		return ok,ok and nil or "HUD activation rejected"
 	end
-	if item.Key then return keyPulse(item.Key) end
-	return false,"Executor cannot activate this control"
-end
-local function attack()
-	local item=findControl({"Attack","AttackButton","Punch","PunchButton","M1","M1Button","BasicAttack"})
-	if item then return fireControl(item) end
-	local tool=LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
-	if tool then local ok=pcall(function() tool:Activate() end); return ok,ok and nil or "Tool activation failed" end
-	if not Input.TouchEnabled and vim then
-		local point=Input:GetMouseLocation()
-		local ok=pcall(function() vim:SendMouseButtonEvent(point.X,point.Y,0,true,game,0) end)
-		if ok then local press={X=point.X,Y=point.Y}; held[press]=true; task.delay(0.05,function() release(press) end); return true end
+	local function isPlayerBody(model)
+		for _,plr in ipairs(Players:GetPlayers()) do if plr.Character==model or plr.Name==model.Name then return true end end
+		return false
 	end
-	return false,"Attack control unavailable · open the native combat HUD"
-end
-local function refreshSkills()
-	local hero,_,_,_,kind=resolveHero(LocalPlayer,false)
-	Controls.Hero=hero; Controls.Profile=hero or "Not detected"; Controls.Skills={}
-	if hero=="Iron Man" and kind~="guess" then
-		Controls.Skills[1]={Name="Repulsor Blast",Control=findControl({"Repulsor Blast"})}
-		Controls.Skills[3]={Name="Unibeam",Control=findControl({"Unibeam"})}
-		-- Slot fallback is accepted only when exactly one control exposes that slot.
-		local bySlot={}
-		for _,item in ipairs(Controls.List) do
-			if item.Slot then if bySlot[item.Slot]~=nil then bySlot[item.Slot]=false else bySlot[item.Slot]=item end end
-		end
-		for slot,skill in pairs(Controls.Skills) do if not skill.Control and bySlot[slot] then skill.Control=bySlot[slot] end end
-	else
-		for _,item in ipairs(Controls.List) do
-			if item.Slot and item.Slot>=1 and item.Slot<=4 and item.Name and item.Name~="" then
-				if Controls.Skills[item.Slot] then Controls.Skills[item.Slot]={Name="Unavailable"}
-				else Controls.Skills[item.Slot]={Name=item.Name,Control=item} end
+	local function refreshNPCs()
+		npcs={}
+		-- Bounded traversal avoids building a full map descendant list on mobile.
+		local stack={workspace}; local inspected=0
+		while #stack>0 and inspected<12000 do
+			local node=table.remove(stack); inspected+=1
+			if node:IsA("Humanoid") and node.Parent and node.Parent:IsA("Model") and not isPlayerBody(node.Parent) then table.insert(npcs,node.Parent) end
+			for _,child in ipairs(node:GetChildren()) do
+				if #stack+inspected>=12000 then break end
+				table.insert(stack,child)
 			end
 		end
 	end
-	if API.OnSkills then API.OnSkills() end
-end
-function API.SelectIronMan()
-	scanControls()
-	local item=findControl({"Iron Man"})
-	if not item then status("Open the game's hero menu, then select Iron Man here"); return false end
-	local ok,err=fireControl(item); status(ok and "Iron Man selection requested" or err); return ok
-end
-function API.DashNow()
-	if not focused or Input:GetFocusedTextBox() or not body(LocalPlayer) then return false,"Character not ready" end
-	if Controls.Age>0.5 then scanControls(); refreshSkills() end
-	local item=findControl({"Dash","DashButton","Dodge","DodgeButton"})
-	local ok,err=fireControl(item)
-	if not ok and err~="Cooldown" then status("Dash: "..tostring(err)) end
-	return ok,err
-end
-API.SupportsInfiniteDash=false
-function API.SetInfiniteDash() status("Infinite Dash unavailable · server cooldown is unchanged"); return false end
-API.Controls=Controls
+	local function pick(localRoot)
+		local found={}
+		local function consider(model,plr)
+			if not model or not model.Parent then return end
+			local hum=model:FindFirstChildOfClass("Humanoid"); local rootPart=model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+			if not hum or hum.Health<=0 or not rootPart or not rootPart:IsA("BasePart") then return end
+			if plr and M.Config.TeamCheck and LocalPlayer.Team and plr.Team==LocalPlayer.Team and not plr.Neutral and not LocalPlayer.Neutral then return end
+			if not plr and M.Config.FarmName~="" and not model.Name:lower():find(M.Config.FarmName:lower(),1,true) then return end
+			local distance=(rootPart.Position-localRoot.Position).Magnitude
+			if distance>(M.Config.Mode=="Aura" and M.Config.AttackRange or M.Config.SearchRange) then return end
+			if M.Config.WallCheck then
+				local params=RaycastParams.new(); params.FilterType=Enum.RaycastFilterType.Exclude; params.FilterDescendantsInstances={LocalPlayer.Character}; params.IgnoreWater=true
+				local hit=workspace:Raycast(localRoot.Position,rootPart.Position-localRoot.Position,params)
+				if hit and not hit.Instance:IsDescendantOf(model) then return end
+			end
+			table.insert(found,{Model=model,Root=rootPart,Humanoid=hum,Distance=distance,Score=M.Config.Priority=="Lowest health" and hum.Health or distance})
+		end
+		if M.Config.Mode=="Farm" then for _,model in ipairs(npcs) do consider(model) end
+		else for _,plr in ipairs(Players:GetPlayers()) do if plr~=LocalPlayer then consider(plr.Character,plr) end end end
+		table.sort(found,function(a,b) if a.Score==b.Score then return a.Model:GetFullName()<b.Model:GetFullName() end; return a.Score<b.Score end)
+		return found[1]
+	end
+	function M.Step(dt)
+		dt=math.clamp(tonumber(dt) or 0,0,0.25); elapsed+=dt; npcClock+=dt; buttonClock+=dt
+		if elapsed<0.1 then return end
+		local step=elapsed; elapsed=0
+		local char=LocalPlayer.Character; local hum=char and char:FindFirstChildOfClass("Humanoid"); local rootPart=char and char:FindFirstChild("HumanoidRootPart")
+		if not alive or M.Config.Mode=="Off" then M.Pause(); return end
+		if not M.Focused or Input:GetFocusedTextBox() or (M.MenuOpen and M.MenuOpen()) then M.Pause(); status("Paused · focus game and minimize hub"); return end
+		if not hum or hum.Health<=0 or not rootPart or not rootPart:IsA("BasePart") or not char.Parent then M.Pause(); status("Waiting for character"); return end
+		if rootPart.Anchored then M.Pause(); status("Paused · character is anchored"); return end
+		if hum.Health/math.max(1,hum.MaxHealth)*100<=M.Config.LowHealth then M.Pause(); status("Paused · low health"); return end
+		if M.Config.Mode=="Farm" and npcClock>=2 then npcClock=0; refreshNPCs() end
+		local target=pick(rootPart)
+		if not target then M.Pause(); status(M.Config.Mode=="Farm" and "No living NPCs match the filter" or "No eligible player in range"); return end
+		M.Target=target.Model
+		if M.Config.Mode~="Aura" and target.Distance>M.Config.AttackRange*0.75 then
+			walker=hum; hum:MoveTo(target.Root.Position)
+		else stopWalking() end
+		if target.Distance>M.Config.AttackRange then attackClock=0; abilityClock=0; status("Approaching "..target.Model.Name); return end
+		attackClock+=step; abilityClock+=step
+		if M.Config.Abilities and #M.Config.Keys>0 and abilityClock>=M.Config.AbilityInterval then
+			abilityClock=0; index=index%#M.Config.Keys+1
+			local ok,err=pulseKey(M.Config.Keys[index]); if not ok then M.SetMode("Off"); status(err); return end
+		elseif attackClock>=M.Config.Interval then
+			attackClock=0
+			local ok,err=attack(); if not ok then M.SetMode("Off"); status(err); return end
+			M.InputsSent+=1
+		end
+		status("Target: "..target.Model.Name.." · inputs sent: "..M.InputsSent)
+	end
+	connect(Input.WindowFocusReleased,function() M.Focused=false; M.Pause() end)
+	connect(Input.WindowFocused,function() M.Focused=true end)
+	function M.Cleanup() M.OnStatus=nil; M.OnChanged=nil; M.SetMode("Off"); cachedButton=nil end
+	return M
+end)()
+API.Automation=Automation
 
-local modified,visualRows={},{}
-local savedHumanoid,savedSpeed,walker
-local lighting; pcall(function() lighting=game:GetService("Lighting") end)
-local lightOriginal={}
-local function restoreHitbox(part,values)
-	pcall(function() part.Size=values.Size; part.CanCollide=values.CanCollide end); modified[part]=nil
-end
-local function stopWalking()
-	if walker and walker.Parent then local root=walker.Parent:FindFirstChild("HumanoidRootPart"); if root then pcall(function() walker:MoveTo(root.Position) end) end end
-	walker=nil
-end
-local function restoreSpeed()
-	if savedHumanoid then pcall(function() savedHumanoid.WalkSpeed=savedSpeed end) end
-	savedHumanoid=nil
-end
-local function clearVisual(plr)
-	local row=visualRows[plr]
-	if row then row.Highlight:Destroy(); row.Tag:Destroy(); visualRows[plr]=nil end
-end
-local function maintenance()
-	local currentParts={}
-	for _,plr in ipairs(Players:GetPlayers()) do
-		if plr~=LocalPlayer then
-			local char,_,root=body(plr)
-			if char then
-				currentParts[root]=true
-				if Config.Hitbox then
-					if not modified[root] then modified[root]={Size=root.Size,CanCollide=root.CanCollide} end
-					root.Size=Vector3.new(Config.HitboxSize,Config.HitboxSize,Config.HitboxSize); root.CanCollide=false
-				end
-				if Config.ESP or Config.Highlights then
-					local row=visualRows[plr]
-					if not row then
-						row={Highlight=create("Highlight",{Enabled=false,FillTransparency=0.8,OutlineTransparency=0,DepthMode=Enum.HighlightDepthMode.AlwaysOnTop},overlay),
-							Tag=create("BillboardGui",{Size=UDim2.fromOffset(220,42),StudsOffsetWorldSpace=Vector3.new(0,2,0),AlwaysOnTop=true},overlay)}
-						row.Label=text(row.Tag,"",12,C.ink,nil,UDim2.fromScale(1,1),true); row.Label.TextXAlignment=Enum.TextXAlignment.Center; row.Label.TextStrokeTransparency=0.35
-						visualRows[plr]=row
-					end
-					local hero=roleFor(plr); local color=heroColor(hero)
-					row.Highlight.Adornee=char; row.Highlight.Enabled=Config.Highlights; row.Highlight.FillColor=color; row.Highlight.OutlineColor=color
-					row.Tag.Adornee=char:FindFirstChild("Head") or root; row.Tag.Enabled=Config.ESP
-					row.Label.Text=plr.Name..(hero and ("\n"..hero) or ""); row.Label.TextColor3=color
-				else clearVisual(plr) end
-			else clearVisual(plr) end
-		end
+local Extras = (function()
+	local E={Config={Speed=false,SpeedValue=32,Jump=false,JumpValue=70,AirJump=false,Fullbright=false,NoFog=false,FOV=false,FOVValue=80}}
+	local savedHumanoid, camera, savedFOV
+	local humanoidOriginal={}
+	local lighting; pcall(function() lighting=game:GetService("Lighting") end)
+	local lightingOriginal, atmosphereOriginal={},{}
+	local function restoreHumanoid()
+		if savedHumanoid then for key,value in pairs(humanoidOriginal) do pcall(function() savedHumanoid[key]=value end) end end
+		table.clear(humanoidOriginal); savedHumanoid=nil
 	end
-	for part,values in pairs(modified) do if not Config.Hitbox or not currentParts[part] then restoreHitbox(part,values) end end
-	local _,hum=body(LocalPlayer)
-	if savedHumanoid and (savedHumanoid~=hum or not Config.Speed) then restoreSpeed() end
-	if Config.Speed and hum then if not savedHumanoid then savedHumanoid=hum; savedSpeed=hum.WalkSpeed end; hum.WalkSpeed=Config.SpeedValue end
-	if lighting then
-		local desired=Config.Fullbright and {Brightness=2,Ambient=Color3.fromRGB(180,180,180),OutdoorAmbient=Color3.fromRGB(180,180,180),GlobalShadows=false} or {}
-		for key,value in pairs(lightOriginal) do if desired[key]==nil then lighting[key]=value; lightOriginal[key]=nil end end
-		for key,value in pairs(desired) do if lightOriginal[key]==nil then lightOriginal[key]=lighting[key] end; lighting[key]=value end
-	end
-end
-local attackClock,skillClock,dashClock,burstLeft,burstClock,burstTarget,skillIndex=0,0,0,0,0,nil,0
-local function pauseActions()
-	releaseAll(); stopWalking(); burstLeft=0; burstTarget=nil; attackClock=0; skillClock=0; dashClock=0; API.Target=nil
-end
-function API.NearestTarget()
-	local _,_,root=body(LocalPlayer); if not root then return end
-	local best,bestDistance
-	for _,plr in ipairs(Players:GetPlayers()) do
-		if plr~=LocalPlayer then local _,_,otherRoot=body(plr); if otherRoot then
-			local distance=(otherRoot.Position-root.Position).Magnitude
-			if distance<=math.max(Config.ChaseRange,Config.AuraRange) and (not bestDistance or distance<bestDistance or distance==bestDistance and plr.UserId<best.UserId) then best=plr; bestDistance=distance end
-		end end
-	end
-	API.Target=best; return best,bestDistance
-end
-local function step(dt)
-	dt=math.clamp(tonumber(dt) or 0,0,0.1)
-	Controls.Age+=dt
-	if Controls.Age>=0.7 then scanControls(); refreshSkills(); for _,plr in ipairs(Players:GetPlayers()) do refreshHero(plr) end end
-	if not active() then pauseActions(); return end
-	local _,hum,root=body(LocalPlayer)
-	if root.Anchored then pauseActions(); return end
-	local target,distance=API.NearestTarget()
-	local _,_,targetRoot=body(target)
-	if not targetRoot then stopWalking(); burstLeft=0; burstTarget=nil; attackClock=0; skillClock=0 end
-	if targetRoot and Config.Face then
-		local look=Vector3.new(targetRoot.Position.X,root.Position.Y,targetRoot.Position.Z)
-		if (look-root.Position).Magnitude>0.1 then root.CFrame=CFrame.lookAt(root.Position,look) end
-	end
-	if Config.Chase and targetRoot and distance<=Config.ChaseRange and distance>Config.AuraRange*0.75 then hum:MoveTo(targetRoot.Position); walker=hum else stopWalking() end
-	if Config.AutoDash then
-		dashClock+=dt
-		if dashClock>=Config.DashInterval then dashClock=0; API.DashNow() end
-	else dashClock=0 end
-	if not targetRoot then burstLeft=0; burstTarget=nil; attackClock=0; skillClock=0; return end
-	if Config.Aura and distance<=Config.AuraRange then
-		attackClock+=dt; burstClock+=dt
-		if burstTarget~=target then burstLeft=0; burstTarget=target end
-		if burstLeft==0 and attackClock>=0.4 then attackClock=0; burstLeft=Config.Burst and 3 or 1; burstClock=0.08 end
-		if burstLeft>0 and burstClock>=0.08 then
-			burstClock=0; burstLeft-=1
-			local ok,err=attack(); if not ok and err~="Cooldown" then Config.Aura=false; burstLeft=0; status(err); if API.OnAura then API.OnAura() end end
-		end
-	else burstLeft=0; attackClock=0 end
-	if Config.AutoSkills and distance<=Config.ChaseRange then
-		skillClock+=dt
-		if skillClock>=Config.SkillInterval then
-			skillClock=0
-			for _=1,4 do
-				skillIndex=skillIndex%4+1
-				local skill=Controls.Skills[skillIndex]
-				if Config.SkillSlots[skillIndex] and skill and skill.Control then
-					local ok,err=fireControl(skill.Control); if not ok and err~="Cooldown" then status("Skill: "..tostring(err)) end
-					break
-				end
+	function E.Step()
+		local char=LocalPlayer.Character; local hum=char and char.Parent and char:FindFirstChildOfClass("Humanoid")
+		if not hum or hum.Health<=0 or hum~=savedHumanoid then restoreHumanoid() end
+		if hum and hum.Health>0 and (E.Config.Speed or E.Config.Jump) then
+			savedHumanoid=hum
+			local desired={}
+			if E.Config.Speed then desired.WalkSpeed=E.Config.SpeedValue end
+			if E.Config.Jump then
+				if hum.UseJumpPower==false then desired.JumpHeight=E.Config.JumpValue^2/(2*math.max(1,workspace.Gravity))
+				else desired.JumpPower=E.Config.JumpValue end
 			end
+			for key,value in pairs(humanoidOriginal) do if desired[key]==nil then hum[key]=value; humanoidOriginal[key]=nil end end
+			for key,value in pairs(desired) do if humanoidOriginal[key]==nil then humanoidOriginal[key]=hum[key] end; hum[key]=value end
+		elseif savedHumanoid then restoreHumanoid() end
+		local current=workspace.CurrentCamera
+		if camera and (camera~=current or not E.Config.FOV) then pcall(function() camera.FieldOfView=savedFOV end); camera=nil end
+		if E.Config.FOV and current then if not camera then camera=current; savedFOV=camera.FieldOfView end; camera.FieldOfView=E.Config.FOVValue end
+		if lighting then
+			local desired={}
+			if E.Config.Fullbright then desired.Brightness=2; desired.Ambient=Color3.fromRGB(180,180,180); desired.OutdoorAmbient=Color3.fromRGB(180,180,180); desired.GlobalShadows=false end
+			if E.Config.NoFog then desired.FogStart=0; desired.FogEnd=100000 end
+			for key,value in pairs(lightingOriginal) do if desired[key]==nil then lighting[key]=value; lightingOriginal[key]=nil end end
+			for key,value in pairs(desired) do if lightingOriginal[key]==nil then lightingOriginal[key]=lighting[key] end; lighting[key]=value end
+			for atmosphere,values in pairs(atmosphereOriginal) do
+				if not E.Config.NoFog or atmosphere.Parent~=lighting then pcall(function() atmosphere.Density=values[1]; atmosphere.Haze=values[2] end); atmosphereOriginal[atmosphere]=nil end
+			end
+			if E.Config.NoFog then for _,node in ipairs(lighting:GetChildren()) do if node:IsA("Atmosphere") then
+				if not atmosphereOriginal[node] then atmosphereOriginal[node]={node.Density,node.Haze} end; node.Density=0; node.Haze=0
+			end end end
 		end
-	else skillClock=0 end
+	end
+	connect(Input.JumpRequest,function()
+		if alive and E.Config.AirJump and not Input:GetFocusedTextBox() then
+			local hum=LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+			if hum and hum.Health>0 then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+		end
+	end)
+	function E.Reset()
+		for _,key in ipairs({"Speed","Jump","AirJump","Fullbright","NoFog","FOV"}) do E.Config[key]=false end
+		E.Step(); restoreHumanoid()
+	end
+	return E
+end)()
+API.Extras=Extras
+
+-- BEGIN ESP LIFECYCLE
+local function hideRow(row)
+	row.holder.Visible = false; row.highlight.Enabled = false; row.billboard.Enabled = false
 end
-API.Step=step; API.RefreshControls=function() scanControls(); refreshSkills(); for _,plr in ipairs(Players:GetPlayers()) do refreshHero(plr) end end
+local function destroyRow(plr)
+	local row = rows[plr]
+	if not row then return end
+	row.holder:Destroy(); row.highlight:Destroy(); row.billboard:Destroy()
+	rows[plr] = nil
+end
+local function makeRow(plr)
+	local row = {}
+	row.highlight = create("Highlight", { Name = "RiftSHA_Highlight", Enabled = false,
+		DepthMode = Enum.HighlightDepthMode.AlwaysOnTop, OutlineTransparency = 0 }, overlay)
+	row.holder = create("Frame", { Name = "RiftSHA_Player", BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1), Visible = false }, espGui)
+	row.box = create("Frame", { BackgroundTransparency = 1 }, row.holder)
+	row.stroke = border(row.box, C.accent)
+	row.tracer = create("Frame", { AnchorPoint = Vector2.new(0, 0.5), BorderSizePixel = 0 }, row.holder)
+	row.distance = text(row.holder, "", 11, C.ink)
+	row.distance.TextXAlignment = Enum.TextXAlignment.Center; row.distance.TextStrokeTransparency = 0.35
+	row.billboard = create("BillboardGui", { Name = "RiftSHA_Tag", Size = UDim2.fromOffset(240, 46),
+		AlwaysOnTop = true, Enabled = false, StudsOffsetWorldSpace = Vector3.new(0, 1.8, 0) }, overlay)
+	row.name = text(row.billboard, plr.Name, 14, C.ink, UDim2.new(), UDim2.new(1, 0, 0, 21), true)
+	row.role = text(row.billboard, "", 12, C.accent, UDim2.fromOffset(0, 21), UDim2.new(1, 0, 0, 19), true)
+	for _, label in ipairs({ row.name, row.role }) do
+		label.TextXAlignment = Enum.TextXAlignment.Center; label.TextStrokeTransparency = 0.3
+	end
+	rows[plr] = row
+	return row
+end
+local function updateRow(plr, row, camera)
+	local char = plr.Character
+	local head = char and char:FindFirstChild("Head")
+	local root = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart)
+	local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+	if not char or not char.Parent or not head or not root or not head:IsA("BasePart")
+		or not root:IsA("BasePart") or (humanoid and humanoid.Health <= 0) then hideRow(row); return end
+	local dist = (camera.CFrame.Position - root.Position).Magnitude
+	if dist > ESP.Config.MaxDistance then hideRow(row); return end
+	local name, kind = roleFor(plr)
+	local color = heroColor(name)
+	row.highlight.Adornee = char; row.highlight.Enabled = true
+	row.highlight.FillColor = color; row.highlight.OutlineColor = color
+	row.highlight.FillTransparency = ESP.Config.FillTransparency
+	row.billboard.Adornee = head; row.billboard.MaxDistance = ESP.Config.MaxDistance
+	row.billboard.Enabled = ESP.Config.ShowName or ESP.Config.ShowCharacter
+	row.name.Visible = ESP.Config.ShowName; row.role.Visible = ESP.Config.ShowCharacter
+	row.role.Position = UDim2.fromOffset(0, ESP.Config.ShowName and 21 or 0)
+	row.role.Text = heroLabel(name, kind); row.role.TextColor3 = color
+	-- Project all eight model bounds corners for R6, R15 and oversized hero rigs.
+	local cf, size = char:GetBoundingBox()
+	local left, top, right, bottom = math.huge, math.huge, -math.huge, -math.huge
+	for x = -1, 1, 2 do for y = -1, 1, 2 do for z = -1, 1, 2 do
+		local point = camera:WorldToViewportPoint(cf:PointToWorldSpace(Vector3.new(size.X*x/2, size.Y*y/2, size.Z*z/2)))
+		if point.Z <= 0.1 then row.holder.Visible = false; return end
+		left = math.min(left, point.X); right = math.max(right, point.X)
+		top = math.min(top, point.Y); bottom = math.max(bottom, point.Y)
+	end end end
+	local view = camera.ViewportSize
+	row.holder.Visible = right >= 0 and left <= view.X and bottom >= 0 and top <= view.Y
+	row.box.Visible = ESP.Config.Box; row.tracer.Visible = ESP.Config.Tracer; row.distance.Visible = ESP.Config.Distance
+	if ESP.Config.Box then
+		row.box.Position = UDim2.fromOffset(left, top); row.box.Size = UDim2.fromOffset(right-left, bottom-top)
+		row.stroke.Color = color
+	end
+	if ESP.Config.Distance then
+		row.distance.Position = UDim2.fromOffset((left+right)/2-65, bottom+5)
+		row.distance.Size = UDim2.fromOffset(130, 16); row.distance.Text = string.format("%d studs", dist)
+	end
+	if ESP.Config.Tracer then
+		local origin = Vector2.new(view.X/2, view.Y-5)
+		local delta = Vector2.new((left+right)/2, bottom) - origin
+		row.tracer.Position = UDim2.fromOffset(origin.X, origin.Y)
+		row.tracer.Size = UDim2.fromOffset(delta.Magnitude, 1)
+		row.tracer.Rotation = math.deg(math.atan2(delta.Y, delta.X)); row.tracer.BackgroundColor3 = color
+	end
+end
+-- END ESP LIFECYCLE
+
+local minimized = false
+local onClosed
 function API.Unload()
 	if not alive then return end
-	alive=false; pauseActions(); restoreSpeed()
-	for part,values in pairs(modified) do restoreHitbox(part,values) end
-	if lighting then for key,value in pairs(lightOriginal) do lighting[key]=value end end
-	for plr in pairs(visualRows) do clearVisual(plr) end
-	for _,connection in ipairs(connections) do connection:Disconnect() end; table.clear(connections)
-	for _,t in pairs(activeTweens) do t:Cancel() end
-	for i=#owned,1,-1 do owned[i]:Destroy() end; table.clear(owned)
-	if env.SuperheroArenaHub==API then env.SuperheroArenaHub=nil end
+	alive = false
+	Movement.Cleanup(); Aim.Cleanup(); Automation.Cleanup(); Extras.Reset()
+	RunService:UnbindFromRenderStep("RiftSHA_TargetLock")
+	for _, c in ipairs(connections) do c:Disconnect() end
+	table.clear(connections)
+	for item, t in pairs(activeTweens) do t:Cancel(); activeTweens[item] = nil end
+	for plr in pairs(rows) do destroyRow(plr) end
+	for i = #owned, 1, -1 do owned[i]:Destroy() end
+	table.clear(owned); table.clear(heroCache)
+	if env.SuperheroArenaHub == API then env.SuperheroArenaHub = nil end
+	if onClosed then onClosed() end
 end
-env.SuperheroArenaHub=API
-connect(Input.WindowFocusReleased,function() focused=false; pauseActions() end)
-connect(Input.WindowFocused,function() focused=true end)
-connect(Input.JumpRequest,function() if alive and focused and Config.AirJump and not Input:GetFocusedTextBox() then local _,hum=body(LocalPlayer); if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end end end)
-connect(Players.PlayerRemoving,function(plr)
-	clearVisual(plr)
-	local char=plr.Character
-	for part,values in pairs(modified) do if char and part:IsDescendantOf(char) then restoreHitbox(part,values) end end
-	if API.Target==plr then pauseActions() end
-end)
-connect(RunService.PreSimulation,maintenance)
-connect(RunService.Heartbeat,step)
+env.SuperheroArenaHub = API
 
-local root=create("Frame",{Name="Window",AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.fromScale(0.5,0.5),Size=UDim2.fromOffset(680,460),BackgroundColor3=C.base,BorderSizePixel=0},gui)
-corner(root,12); border(root)
-local header=create("Frame",{Name="Header",Active=true,Size=UDim2.new(1,-86,0,58),BackgroundTransparency=1},root)
-text(header,"RIFT HUB",16,C.ink,UDim2.fromOffset(16,8),UDim2.new(1,-16,0,23),true)
-text(header,"SUPERHERO ARENA",9,C.accent,UDim2.fromOffset(16,32),UDim2.new(1,-16,0,16),true)
-local function chrome(label,x)
-	local b=create("TextButton",{Size=UDim2.fromOffset(30,30),Position=UDim2.new(1,x,0,13),Text=label,TextColor3=C.ink,Font=Enum.Font.Gotham,TextSize=17,BackgroundColor3=C.panel,AutoButtonColor=false,BorderSizePixel=0},root)
-	corner(b,7); return b
+-- Window: charcoal surfaces, warm accent, small vector icons, restrained motion.
+local root = create("Frame", { Name = "Window", AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(740, 500), BackgroundTransparency = 1 }, gui)
+local uiScale = create("UIScale", { Scale = 1 }, root)
+local shadow = create("Frame", { Position = UDim2.fromOffset(-7, -4), Size = UDim2.new(1, 14, 1, 16),
+	BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.65, BorderSizePixel = 0 }, root)
+corner(shadow, 20)
+local shell = create("CanvasGroup", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = C.base,
+	BorderSizePixel = 0, GroupTransparency = 1 }, root)
+corner(shell, 15); border(shell)
+local shellScale = create("UIScale", { Scale = 0.97 }, shell)
+create("UIGradient", { Rotation = 105, Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(210, 215, 228)) }, shell)
+local sidebar = create("Frame", { Size = UDim2.new(0, 168, 1, 0), BackgroundColor3 = C.panel, BorderSizePixel = 0 }, shell)
+create("Frame", { Position = UDim2.fromOffset(167, 0), Size = UDim2.new(0, 1, 1, 0), BackgroundColor3 = C.border, BorderSizePixel = 0 }, sidebar)
+local brand = text(sidebar, "RIFT", 26, C.ink, UDim2.fromOffset(20, 20), UDim2.fromOffset(120, 29), true)
+text(sidebar, "H U B  /  ARENA", 10, C.accent, UDim2.fromOffset(21, 52), UDim2.fromOffset(145, 18), true)
+text(sidebar, "WORKSPACE", 9, C.faint, UDim2.fromOffset(20, 99), UDim2.fromOffset(130, 16), true)
+local nav = create("ScrollingFrame", { Name = "Navigation", Position = UDim2.fromOffset(12, 126), Size = UDim2.new(1, -24, 1, -208), BackgroundTransparency = 1, BorderSizePixel = 0, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y, ScrollBarThickness = 2, ScrollBarImageColor3 = C.accent }, sidebar)
+create("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, nav)
+
+local function avatar(parent, plr, pos, diameter)
+	local frame = create("Frame", { Position = pos, Size = UDim2.fromOffset(diameter, diameter), BackgroundColor3 = C.raised, BorderSizePixel = 0 }, parent)
+	corner(frame, diameter/2); border(frame)
+	local initial = text(frame, plr.DisplayName:sub(1, 1), 14, C.sub)
+	initial.TextXAlignment = Enum.TextXAlignment.Center
+	local image = create("ImageLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
+		Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(plr.UserId) .. "&w=150&h=150" }, frame)
+	corner(image, diameter/2)
+	return frame
 end
-local minimize=chrome("−",-78); local close=chrome("×",-40)
-local nav=create("ScrollingFrame",{Name="Navigation",Position=UDim2.fromOffset(10,68),Size=UDim2.new(0,128,1,-106),BackgroundTransparency=1,BorderSizePixel=0,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollingDirection=Enum.ScrollingDirection.Y,ScrollBarThickness=2,ScrollBarImageColor3=C.accent},root)
-create("UIListLayout",{Padding=UDim.new(0,6),SortOrder=Enum.SortOrder.LayoutOrder},nav)
-local content=create("Frame",{Position=UDim2.fromOffset(148,66),Size=UDim2.new(1,-158,1,-103),BackgroundTransparency=1},root)
-statusLabel=text(root,"Minimize the hub to run combat, skills and auto dash.",10,C.sub,UDim2.new(0,14,1,-28),UDim2.new(1,-28,0,20))
-local pages,tabs={},{}
-function API.SelectTab(id)
-	for name,panel in pairs(pages) do panel.Visible=name==id; tabs[name].BackgroundColor3=name==id and C.accentDim or C.panel end
+local profile = create("Frame", { Position = UDim2.new(0, 12, 1, -76), Size = UDim2.new(1, -24, 0, 62),
+	BackgroundColor3 = C.raised, BorderSizePixel = 0 }, sidebar)
+corner(profile, 10)
+avatar(profile, LocalPlayer, UDim2.fromOffset(9, 13), 34)
+text(profile, LocalPlayer.DisplayName, 11, C.ink, UDim2.fromOffset(52, 13), UDim2.new(1, -58, 0, 17), true)
+text(profile, "@" .. LocalPlayer.Name, 9, C.sub, UDim2.fromOffset(52, 32), UDim2.new(1, -58, 0, 16))
+
+local top = create("Frame", { Position = UDim2.fromOffset(168, 0), Size = UDim2.new(1, -168, 0, 76), BackgroundTransparency = 1 }, shell)
+text(top, "THE DUELISTS / SUPERHERO ARENA", 9, C.faint, UDim2.fromOffset(24, 16), UDim2.new(1, -118, 0, 14), true)
+local pageTitle = text(top, "Overview", 22, C.ink, UDim2.fromOffset(24, 35), UDim2.new(1, -118, 0, 30), true)
+local dragHandle = create("Frame", { Active = true, Size = UDim2.new(1, -102, 1, 0), BackgroundTransparency = 1 }, top)
+local function chromeButton(label, offset, danger)
+	local b = create("TextButton", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, offset, 0, 21),
+		Size = UDim2.fromOffset(30, 30), BackgroundColor3 = C.raised, AutoButtonColor = false,
+		Text = label, TextColor3 = C.sub, TextSize = 17, Font = Enum.Font.Gotham, BorderSizePixel = 0 }, top)
+	corner(b, 8)
+	connect(b.MouseEnter, function() animate(b, { BackgroundColor3 = C.hover, TextColor3 = danger and C.danger or C.ink }) end)
+	connect(b.MouseLeave, function() animate(b, { BackgroundColor3 = C.raised, TextColor3 = C.sub }) end)
+	return b
 end
-local function page(id,label,order)
-	local button=create("TextButton",{Size=UDim2.new(1,0,0,38),LayoutOrder=order,Text=label,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.ink,BackgroundColor3=C.panel,BorderSizePixel=0,AutoButtonColor=false},nav)
-	corner(button,8); tabs[id]=button
-	local scroll=create("ScrollingFrame",{Name=id,Size=UDim2.fromScale(1,1),CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollingDirection=Enum.ScrollingDirection.Y,ScrollBarThickness=3,ScrollBarImageColor3=C.accent,BackgroundTransparency=1,BorderSizePixel=0,Visible=false},content)
-	create("UIPadding",{PaddingRight=UDim.new(0,7),PaddingBottom=UDim.new(0,10)},scroll)
-	create("UIListLayout",{Padding=UDim.new(0,8),SortOrder=Enum.SortOrder.LayoutOrder},scroll)
-	pages[id]=scroll; connect(button.Activated,function() API.SelectTab(id) end)
+local close = chromeButton("×", -16, true)
+local minimize = chromeButton("−", -53)
+local body = create("Frame", { Position = UDim2.fromOffset(168, 80), Size = UDim2.new(1, -168, 1, -112), BackgroundTransparency = 1 }, shell)
+local footer = text(shell, "Ready", 10, C.faint, UDim2.new(0, 192, 1, -25), UDim2.new(1, -310, 0, 16))
+text(shell, "RSHIFT  /  HIDE", 9, C.faint, UDim2.new(1, -120, 1, -25), UDim2.fromOffset(105, 16))
+
+local function icon(parent, name)
+	local g = create("CanvasGroup", { Position = UDim2.fromOffset(13, 12), Size = UDim2.fromOffset(20, 20),
+		BackgroundTransparency = 1, GroupColor3 = C.sub }, parent)
+	local white = Color3.new(1, 1, 1)
+	local function line(x1, y1, x2, y2)
+		local d = Vector2.new(x2-x1, y2-y1)
+		local f = create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset((x1+x2)/2, (y1+y2)/2),
+			Size = UDim2.fromOffset(d.Magnitude, 1.5), Rotation = math.deg(math.atan2(d.Y, d.X)), BackgroundColor3 = white, BorderSizePixel = 0 }, g)
+		corner(f, 2)
+	end
+	local function circle(x, y, r)
+		local f = create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x, y),
+			Size = UDim2.fromOffset(r, r), BackgroundTransparency = 1 }, g)
+		corner(f, r); border(f, white)
+	end
+	if name == "home" then
+		line(2, 9, 10, 2); line(10, 2, 18, 9); line(4, 8, 4, 18); line(4, 18, 16, 18); line(16, 18, 16, 8)
+	elseif name == "abilities" or name == "combat" then
+		circle(10, 10, 12); circle(10, 10, 3)
+		line(10, 0, 10, 6); line(10, 14, 10, 20); line(0, 10, 6, 10); line(14, 10, 20, 10)
+	elseif name == "farming" then
+		line(3,17,17,3); line(2,5,8,2); line(8,2,18,12); line(12,18,18,12)
+	elseif name == "world" then
+		circle(10,10,17); line(2,10,18,10); line(10,2,10,18); line(4,5,16,5); line(4,15,16,15)
+	elseif name == "utility" then
+		line(3,17,14,6); line(3,17,6,18); line(6,18,17,7); line(14,6,13,2); line(13,2,18,5); line(18,5,17,7)
+	elseif name == "visuals" then
+		local p = { {1,10}, {5,5}, {10,3}, {15,5}, {19,10}, {15,15}, {10,17}, {5,15}, {1,10} }
+		for i=1,#p-1 do line(p[i][1],p[i][2],p[i+1][1],p[i+1][2]) end; circle(10, 10, 6)
+	elseif name == "movement" then
+		circle(12, 3, 4); line(11, 6, 9, 12); line(11, 7, 6, 8); line(6, 8, 4, 5)
+		line(11, 7, 15, 10); line(15, 10, 18, 7)
+		line(9, 12, 5, 15); line(5, 15, 2, 14); line(9, 12, 14, 15); line(14, 15, 12, 19)
+	elseif name == "players" then
+		circle(10, 4, 5); line(10, 7, 10, 13); line(4, 11, 10, 9); line(10, 9, 16, 11); line(10, 13, 5, 19); line(10, 13, 15, 19)
+	else
+		circle(10, 10, 12); circle(10, 10, 4)
+		for i=0,7 do local a=i*math.pi/4; line(10+math.cos(a)*6,10+math.sin(a)*6,10+math.cos(a)*9,10+math.sin(a)*9) end
+	end
+	return g
+end
+local currentTab, pages, tabs = "home", {}, {}
+local function page(id, title, order)
+	local canvas = create("CanvasGroup", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false }, body)
+	local scroll = create("ScrollingFrame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0,
+		ScrollBarThickness = 3, ScrollBarImageColor3 = C.accent, CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y }, canvas)
+	create("UIPadding", { PaddingLeft = UDim.new(0, 24), PaddingRight = UDim.new(0, 24), PaddingBottom = UDim.new(0, 12), PaddingTop = UDim.new(0, 3) }, scroll)
+	create("UIListLayout", { Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }, scroll)
+	local b = create("TextButton", { Size = UDim2.new(1, 0, 0, 44), LayoutOrder = order, BackgroundColor3 = C.panel,
+		AutoButtonColor = false, Text = "", BorderSizePixel = 0 }, nav)
+	corner(b, 9)
+	local stroke = border(b, C.border, 1)
+	local g = icon(b, id)
+	local label = text(b, title, 12, C.sub, UDim2.fromOffset(43, 0), UDim2.new(1, -49, 1, 0), true)
+	local marker = create("Frame", { Position = UDim2.fromOffset(0, 12), Size = UDim2.fromOffset(3, 20),
+		BackgroundColor3 = C.accent, BorderSizePixel = 0, Visible = false }, b); corner(marker, 2)
+	pages[id] = { group = canvas, scroll = scroll, title = title }
+	tabs[id] = { button = b, label = label, icon = g, marker = marker, stroke = stroke }
+	connect(b.MouseEnter, function()
+		animate(b, { BackgroundColor3 = currentTab == id and C.accentDim or C.hover })
+		animate(label, { Position = UDim2.fromOffset(47, 0) })
+	end)
+	connect(b.MouseLeave, function()
+		animate(b, { BackgroundColor3 = currentTab == id and C.accentDim or C.panel })
+		animate(label, { Position = UDim2.fromOffset(43, 0) })
+	end)
+	connect(b.Activated, function() API.SelectTab(id) end)
 	return scroll
 end
-local combat=page("combat","Combat",1)
-local skills=page("skills","Hero Skills",2)
-local movement=page("movement","Movement",3)
-local visuals=page("visuals","Visuals",4)
-local server=page("server","Server",5)
+local home = page("home", "Overview", 1)
+local combatPage = page("combat", "Combat", 2)
+local abilitiesPage = page("abilities", "Abilities", 3)
+local farmingPage = page("farming", "Farming", 4)
+local visuals = page("visuals", "Visuals", 5)
+local movementPage = page("movement", "Movement", 6)
+local worldPage = page("world", "World", 7)
+local playerPage = page("players", "Players", 8)
+local utilityPage = page("utility", "Utility", 9)
+local settings = page("settings", "Settings", 10)
 
 local function surface(parent, height)
 	local f = create("Frame", { Size = UDim2.new(1, 0, 0, height or 60), BackgroundColor3 = C.panel, BorderSizePixel = 0 }, parent)
@@ -685,13 +1035,13 @@ local function toggle(parent, title, subtitle, initial, changed)
 		BackgroundTransparency = 1, AutoButtonColor = false, Text = "", BorderSizePixel = 0 }, parent)
 	corner(b, 8)
 	local label = text(b, title, 12, C.ink, UDim2.fromOffset(8, 8), UDim2.new(1, -76, 0, 19))
-	local subtitleLabel = text(b, subtitle, 10, C.sub, UDim2.fromOffset(8, 29), UDim2.new(1, -76, 0, 16))
+	text(b, subtitle, 10, C.sub, UDim2.fromOffset(8, 29), UDim2.new(1, -76, 0, 16))
 	local track = create("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0),
 		Size = UDim2.fromOffset(36, 20), BackgroundColor3 = C.border, BorderSizePixel = 0 }, b); corner(track, 10)
 	local knob = create("Frame", { Size = UDim2.fromOffset(14, 14), Position = UDim2.fromOffset(3, 3),
 		BackgroundColor3 = C.sub, BorderSizePixel = 0 }, track); corner(knob, 7)
 	local value = initial
-	local control = { Label = label, Subtitle = subtitleLabel }
+	local control = {}
 	function control.Get() return value end
 	function control.Set(v, silent)
 		value = v == true
@@ -752,122 +1102,536 @@ local function slider(parent, title, minimum, maximum, initial, format, changed)
 	return control
 end
 
-
-local group=section(combat,"Combat & Targeting")
-local aura=toggle(group,"Kill Aura","Normal attacks on a nearby target.",false,function(v) Config.Aura=v end)
-API.OnAura=function() aura.Set(Config.Aura,true) end
-toggle(group,"Burst Hits","Send three spaced attack inputs per burst.",false,function(v) Config.Burst=v end)
-toggle(group,"Auto Face Target","Turn toward the selected target.",false,function(v) Config.Face=v end)
-toggle(group,"Auto Chase","Walk toward the selected target.",false,function(v) Config.Chase=v; if not v then stopWalking() end end)
-slider(group,"Aura Range",3,30,Config.AuraRange,function(v) return string.format("%d studs",v) end,function(v) Config.AuraRange=v end)
-slider(group,"Chase Range",10,500,Config.ChaseRange,function(v) return string.format("%d studs",v) end,function(v) Config.ChaseRange=v end)
-action(group,"Nearest Target",function() local plr=API.NearestTarget(); status(plr and ("Target: @"..plr.Name) or "No target within chase range") end)
-toggle(group,"Big Hitbox","Local hitboxes; server hit validation still applies.",false,function(v) Config.Hitbox=v; maintenance() end)
-slider(group,"Hitbox Size",2,15,Config.HitboxSize,function(v) return string.format("%d studs",v) end,function(v) Config.HitboxSize=v end)
-
-local skillGroup=section(skills,"Hero Skills & Abilities")
-action(skillGroup,"Hero Selection: Iron Man",API.SelectIronMan)
-local skillMaster=toggle(skillGroup,"Auto Skills – Dynamic Hero","Follows the equipped hero and detected game controls.",false,function(v) Config.AutoSkills=v end)
-local slotTitles={"Primary Skill","Secondary Skill","Tertiary Skill","Quaternary Skill"}
-local slotControls={}
-for slot=1,4 do
-	slotControls[slot]=toggle(skillGroup,slotTitles[slot]..": Unavailable","No verified skill control.",false,function(value)
-		local skill=Controls.Skills[slot]
-		Config.SkillSlots[slot]=value and skill~=nil and skill.Name~="Unavailable"
-		slotControls[slot].Set(Config.SkillSlots[slot],true)
-	end)
+local heroCard = surface(home, 150)
+create("UIGradient", { Rotation = 15, Color = ColorSequence.new(Color3.fromRGB(255, 242, 217), Color3.fromRGB(147, 165, 192)) }, heroCard)
+text(heroCard, "RIFT / SUPERHERO ARENA", 10, C.accent, UDim2.fromOffset(18, 17), UDim2.new(1, -36, 0, 17), true)
+text(heroCard, "Your arena. Your view.", 23, C.ink, UDim2.fromOffset(18, 45), UDim2.new(1, -36, 0, 32), true)
+text(heroCard, "Hero colors, clean overlays and a live player roster.", 11, C.sub, UDim2.fromOffset(18, 85), UDim2.new(1, -36, 0, 19))
+local statusLabel = text(heroCard, "●  ESP OFF", 10, C.sub, UDim2.fromOffset(18, 116), UDim2.new(1, -36, 0, 18), true)
+local statRow = create("Frame", { Size = UDim2.new(1, 0, 0, 76), BackgroundTransparency = 1 }, home)
+create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10) }, statRow)
+local function stat(title)
+	local f = surface(statRow, 76); f.Size = UDim2.new(0.5, -5, 1, 0)
+	text(f, title, 9, C.faint, UDim2.fromOffset(13, 10), UDim2.new(1, -26, 0, 15), true)
+	return text(f, "—", 18, C.ink, UDim2.fromOffset(13, 31), UDim2.new(1, -26, 0, 27), true)
 end
-API.OnSkills=function()
-	for slot,control in ipairs(slotControls) do
-		local skill=Controls.Skills[slot]
-		local available=skill and skill.Name~="Unavailable"
-		control.Label.Text=slotTitles[slot]..": "..(available and skill.Name or "Unavailable")
-		control.Subtitle.Text=available and (skill.Control and ("Hero: "..Controls.Profile) or "Game skill control not found") or "Unavailable for the equipped hero."
-		control.Set(available and Config.SkillSlots[slot] or false,true)
+local playerCount, ownRole = stat("PLAYERS ONLINE"), stat("YOUR HERO")
+local quick = section(home, "Quick control", "Your visuals stay active while the window is minimized.")
+
+local function setESP(value)
+	ESP.Config.Enabled = value
+	if not value then for _, row in pairs(rows) do hideRow(row) end end
+	for _, control in ipairs(toggles) do control.Set(value, true) end
+	statusLabel.Text = value and "●  ESP ACTIVE" or "●  ESP OFF"
+	statusLabel.TextColor3 = value and C.green or C.sub
+end
+table.insert(toggles, toggle(quick, "Player ESP", "Highlight players using their detected hero color.", false, setESP))
+local master = section(visuals, "Player overlay", "Applies to other players. Hero data refreshes once per second.")
+table.insert(toggles, toggle(master, "Enable ESP", "Names, hero roles and colored highlights.", false, setESP))
+toggle(master, "Player names", "Show the account username above each player.", true, function(v) ESP.Config.ShowName = v end)
+toggle(master, "Hero roles", "Show the detected hero below the username.", true, function(v) ESP.Config.ShowCharacter = v end)
+toggle(master, "Guess unmapped heroes", "Mark estimated names with (guess). Menu mappings take priority.", true, function(v) API.SetGuessing(v) end)
+local geometry = section(visuals, "Screen details")
+toggle(geometry, "Bounding boxes", "Fits the character model, including larger heroes.", true, function(v) ESP.Config.Box = v end)
+toggle(geometry, "Tracers", "Draw a line from the bottom of your screen.", false, function(v) ESP.Config.Tracer = v end)
+toggle(geometry, "Distance", "Show the distance from your camera in studs.", true, function(v) ESP.Config.Distance = v end)
+slider(geometry, "Fill opacity", 0, 1, 1-ESP.Config.FillTransparency, function(v) return string.format("%d%%", math.floor(v*100+0.5)) end,
+	function(v) ESP.Config.FillTransparency = 1-v end)
+slider(geometry, "Maximum distance", 100, 3000, 1500, function(v) return string.format("%d studs", v) end,
+	function(v) ESP.Config.MaxDistance = math.floor(v) end)
+
+local aimMain = section(abilitiesPage, "Ability aim assist", "Camera lock-on · L toggles · T selects the next target")
+local aimToggle = toggle(aimMain, "Auto lock-on", "Keep your camera aimed at a valid target.", false, Aim.SetEnabled)
+Aim.OnChanged = function() aimToggle.Set(Aim.Config.Enabled, true) end
+local aimStatus = text(aimMain, "Lock-on off", 11, C.accent, nil, UDim2.new(1, 0, 0, 24))
+Aim.OnStatus = function(value) aimStatus.Text = value end
+toggle(aimMain, "Hold to lock", "Hold right mouse or the on-screen HOLD LOCK button.", false,
+	function(v) Aim.Config.HoldToLock = v; Aim.Release() end)
+toggle(aimMain, "Sticky target", "Keep the same target until it leaves your filters.", true, function(v) Aim.Config.Sticky = v end)
+action(aimMain, "Next target", Aim.Cycle, true)
+local priority = action(aimMain, "Priority: Crosshair", function() end)
+local priorityLabel = priority:FindFirstChildOfClass("TextLabel")
+connect(priority.Activated, function()
+	local modes = { "Crosshair", "Nearest", "Lowest health" }
+	Aim.Config.Priority = modes[(table.find(modes, Aim.Config.Priority) or 0)%#modes+1]
+	priorityLabel.Text = "Priority: " .. Aim.Config.Priority; Aim.Release()
+end)
+local part = action(aimMain, "Aim point: Body", function() end)
+local partLabel = part:FindFirstChildOfClass("TextLabel")
+connect(part.Activated, function()
+	Aim.Config.AimPart = Aim.Config.AimPart == "Body" and "Head" or "Body"
+	partLabel.Text = "Aim point: " .. Aim.Config.AimPart
+end)
+local filters = section(abilitiesPage, "Target filters")
+toggle(filters, "Check walls", "Only acquire targets visible from the camera.", true, function(v) Aim.Config.WallCheck = v end)
+toggle(filters, "Ignore teammates", "Skip teammates when the game exposes teams.", true, function(v) Aim.Config.TeamCheck = v end)
+slider(filters, "Target range", 25, 1500, Aim.Config.MaxRange, function(v) return string.format("%d studs", v) end,
+	function(v) Aim.Config.MaxRange = v end)
+slider(filters, "Acquisition radius", 40, 600, Aim.Config.Radius, function(v) return string.format("%d px", v) end,
+	function(v) Aim.Config.Radius = v end)
+local aimTuning = section(abilitiesPage, "Aim and target display")
+slider(aimTuning, "Camera response", 3, 35, Aim.Config.Responsiveness, function(v) return string.format("%.0f", v) end,
+	function(v) Aim.Config.Responsiveness = v end)
+slider(aimTuning, "Movement prediction", 0, 0.25, Aim.Config.Prediction, function(v) return string.format("%d ms", v*1000) end,
+	function(v) Aim.Config.Prediction = v end)
+toggle(aimTuning, "Show acquisition circle", "Draw the search area around the screen center.", true, function(v) Aim.Config.ShowRadius = v end)
+toggle(aimTuning, "Show target panel", "Username, hero, distance and live health.", true, function(v) Aim.Config.ShowPanel = v end)
+local abilityNote = text(aimTuning, "Aims your camera. Each game's abilities decide whether to use camera direction, a cursor or their own targets.", 10, C.sub, nil, UDim2.new(1, 0, 0, 40))
+abilityNote.TextWrapped = true; abilityNote.TextTruncate = Enum.TextTruncate.None
+
+local movementGroup = section(movementPage, "Movement")
+local noclipControl=toggle(movementGroup, "Noclip", "Walk through solid objects. Switch off to restore collisions.", false, Movement.SetEnabled)
+
+local function entry(parent, placeholder, apply)
+	local box=create("TextBox",{Size=UDim2.new(1,0,0,36),BackgroundColor3=C.base,BorderSizePixel=0,
+		Text="",PlaceholderText=placeholder,ClearTextOnFocus=false,Font=Enum.Font.Gotham,TextSize=11,
+		TextColor3=C.ink,PlaceholderColor3=C.faint,TextXAlignment=Enum.TextXAlignment.Left},parent)
+	corner(box,8); create("UIPadding",{PaddingLeft=UDim.new(0,10)},box)
+	action(parent,"Apply "..placeholder, function() box:ReleaseFocus(); apply(box.Text) end)
+	return box
+end
+local combatMain=section(combatPage,"Attack automation","Uses normal attacks; server cooldowns and hit validation still apply.")
+local modeControls={}
+modeControls.Aura=toggle(combatMain,"Kill aura · nearby attacks","Attack a nearby player without moving toward them.",false,
+	function(v) Automation.SetMode(v and "Aura" or "Off") end)
+modeControls.Fight=toggle(combatMain,"Auto fight · pursue players","Walk toward an eligible player and attack within range.",false,
+	function(v) Automation.SetMode(v and "Fight" or "Off") end)
+local combatStatus=text(combatMain,"Off",10,C.accent,nil,UDim2.new(1,0,0,40)); combatStatus.TextWrapped=true; combatStatus.TextTruncate=Enum.TextTruncate.None
+local controlGroup=section(combatPage,"Attack controls","Choose how your existing game attack is activated.")
+local methodButton=action(controlGroup,"Attack method: HUD attack",function() end)
+connect(methodButton.Activated,function()
+	local methods={"HUD attack","Equipped tool","Keyboard key"}
+	Automation.Config.AttackMethod=methods[(table.find(methods,Automation.Config.AttackMethod) or 0)%#methods+1]
+	methodButton:FindFirstChildOfClass("TextLabel").Text="Attack method: "..Automation.Config.AttackMethod
+	Automation.SetMode("Off")
+end)
+entry(controlGroup,"attack key",function(value)
+	local keys=Automation.ParseKeys(value)
+	if keys and #keys==1 then Automation.Config.AttackKey=value; combatStatus.Text="Attack key applied"
+	else combatStatus.Text="Enter one valid game attack key; L, T, F8 and RightShift are reserved" end
+end)
+action(controlGroup,"Detect Attack button",function()
+	local button=Automation.FindAttackButton()
+	combatStatus.Text=button and ("Found: "..button:GetFullName()) or "No unique visible Attack button found"
+end)
+slider(controlGroup,"Attack interval",0.15,2,Automation.Config.Interval,function(v) return string.format("%.2f s",v) end,function(v) Automation.Config.Interval=v end)
+slider(controlGroup,"Melee activation range",3,30,Automation.Config.AttackRange,function(v) return string.format("%d studs",v) end,function(v) Automation.Config.AttackRange=v end)
+local combatFilters=section(combatPage,"Target filters")
+toggle(combatFilters,"Combat team check","Skip replicated teammates.",true,function(v) Automation.Config.TeamCheck=v end)
+toggle(combatFilters,"Combat wall check","Skip targets behind solid obstacles.",true,function(v) Automation.Config.WallCheck=v end)
+local combatPriority=action(combatFilters,"Combat priority: Nearest",function() end)
+connect(combatPriority.Activated,function()
+	Automation.Config.Priority=Automation.Config.Priority=="Nearest" and "Lowest health" or "Nearest"
+	combatPriority:FindFirstChildOfClass("TextLabel").Text="Combat priority: "..Automation.Config.Priority
+end)
+slider(combatFilters,"Low health pause",0,70,Automation.Config.LowHealth,function(v) return string.format("%d%%",v) end,function(v) Automation.Config.LowHealth=v end)
+local rotation=section(combatPage,"Ability key rotation","Enter the actual game keys; this does not discover abilities or remove cooldowns.")
+entry(rotation,"ability keys (comma separated)",function(value)
+	local keys=Automation.ParseKeys(value)
+	if keys then Automation.Config.Keys=keys; combatStatus.Text="Applied "..#keys.." ability keys"
+	else combatStatus.Text="Invalid key list · use at most eight valid keys; hub shortcuts are reserved" end
+end)
+local abilityKeysToggle=toggle(rotation,"Auto ability keys","Cycle assigned keys while the target is in melee activation range.",false,function(v) Automation.Config.Abilities=v end)
+slider(rotation,"Ability key interval",0.25,5,Automation.Config.AbilityInterval,function(v) return string.format("%.2f s",v) end,function(v) Automation.Config.AbilityInterval=v end)
+
+local farmMain=section(farmingPage,"NPC farming","Walk and attack living humanoid NPCs. Rewards are awarded by the game.")
+modeControls.Farm=toggle(farmMain,"Auto farm NPCs","Uses the attack method configured in Combat.",false,function(v) Automation.SetMode(v and "Farm" or "Off") end)
+local farmStatus=text(farmMain,"Off",10,C.accent,nil,UDim2.new(1,0,0,40)); farmStatus.TextWrapped=true; farmStatus.TextTruncate=Enum.TextTruncate.None
+Automation.OnStatus=function(value) combatStatus.Text=value; farmStatus.Text=value end
+Automation.OnChanged=function() for mode,control in pairs(modeControls) do control.Set(Automation.Config.Mode==mode,true) end end
+entry(farmMain,"NPC name filter",function(value) Automation.Config.FarmName=value; farmStatus.Text=value=="" and "NPC filter cleared" or "NPC filter: "..value end)
+slider(farmMain,"Pursuit search range",25,1000,Automation.Config.SearchRange,function(v) return string.format("%d studs",v) end,function(v) Automation.Config.SearchRange=v end)
+local farmNote=text(farmMain,"Pursuit uses normal walking toward visible targets. It pauses with the hub open, while typing, on focus loss, death or low health. No NPCs in this game means there is nothing to farm.",10,C.sub,nil,UDim2.new(1,0,0,64)); farmNote.TextWrapped=true; farmNote.TextTruncate=Enum.TextTruncate.None
+
+local extraControls={}
+local mobility=section(movementPage,"Character movement")
+extraControls.Speed=toggle(mobility,"Custom walk speed","Local setting; game movement limits can still apply.",false,function(v) Extras.Config.Speed=v end)
+slider(mobility,"Walk speed",8,80,Extras.Config.SpeedValue,function(v) return string.format("%.0f",v) end,function(v) Extras.Config.SpeedValue=v end)
+extraControls.Jump=toggle(mobility,"Custom jump strength","Supports both jump-power and jump-height characters.",false,function(v) Extras.Config.Jump=v end)
+slider(mobility,"Jump strength",25,120,Extras.Config.JumpValue,function(v) return string.format("%.0f",v) end,function(v) Extras.Config.JumpValue=v end)
+extraControls.AirJump=toggle(mobility,"Air jump","Allow another jump request while airborne.",false,function(v) Extras.Config.AirJump=v end)
+local lightingGroup=section(worldPage,"Visibility")
+extraControls.Fullbright=toggle(lightingGroup,"Fullbright","Bright ambient lighting without local shadows.",false,function(v) Extras.Config.Fullbright=v end)
+extraControls.NoFog=toggle(lightingGroup,"Clear fog and haze","Restore original fog and atmosphere when disabled.",false,function(v) Extras.Config.NoFog=v end)
+local cameraGroup=section(worldPage,"Camera")
+extraControls.FOV=toggle(cameraGroup,"Custom field of view","Keep a wider or narrower camera view.",false,function(v) Extras.Config.FOV=v end)
+slider(cameraGroup,"Field of view",40,110,Extras.Config.FOVValue,function(v) return string.format("%.0f°",v) end,function(v) Extras.Config.FOVValue=v end)
+local utilityGroup=section(utilityPage,"Session controls")
+function API.EmergencyStop()
+	Automation.SetMode("Off"); Automation.Config.Abilities=false; abilityKeysToggle.Set(false,true); Aim.SetEnabled(false); Movement.SetEnabled(false); noclipControl.Set(false,true); Extras.Reset()
+	for _,control in pairs(extraControls) do control.Set(false,true) end
+	setESP(false)
+end
+action(utilityGroup,"Stop all features · F8",API.EmergencyStop,true)
+action(utilityGroup,"Restore world and movement",function() Extras.Reset(); for _,control in pairs(extraControls) do control.Set(false,true) end end)
+action(utilityGroup,"Clear ability key rotation",function() Automation.Config.Keys={}; API.EmergencyStop() end)
+action(utilityGroup,"Copy attack setup report",function()
+	local button=Automation.FindAttackButton()
+	local value="Rift Hub / Attack setup / v"..API.Version.."\nPlace: "..tostring(game.PlaceId).."\nAttack method: "..Automation.Config.AttackMethod.."\nButton: "..(button and button:GetFullName() or "None or ambiguous").."\nStatus: "..Automation.Status.."\nEquipped tool: "..tostring(LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool"))
+	if type(setclipboard)=="function" then pcall(setclipboard,value) end; print(value)
+end)
+
+local search = create("TextBox", { Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = C.panel, BorderSizePixel = 0,
+	PlaceholderText = "Search username, display name or hero…", Text = "", ClearTextOnFocus = false,
+	TextColor3 = C.ink, PlaceholderColor3 = C.faint, TextSize = 11, Font = Enum.Font.Gotham,
+	TextXAlignment = Enum.TextXAlignment.Left }, playerPage)
+corner(search, 9); border(search)
+create("UIPadding", { PaddingLeft = UDim.new(0, 13), PaddingRight = UDim.new(0, 13) }, search)
+local roster = create("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1 }, playerPage)
+create("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.Name }, roster)
+local empty = text(playerPage, "No matching players.", 12, C.sub, nil, UDim2.new(1, 0, 0, 30)); empty.Visible = false
+local playerCards, selectedPlayer = {}, LocalPlayer
+local refreshDiagnostics
+local function playerCard(plr)
+	local f = surface(roster, 72); f.Name = plr.Name
+	avatar(f, plr, UDim2.fromOffset(12, 15), 40)
+	text(f, plr.DisplayName .. (plr == LocalPlayer and "  ·  YOU" or ""), 12, C.ink, UDim2.fromOffset(65, 11), UDim2.new(1, -150, 0, 19), true)
+	text(f, "@" .. plr.Name, 10, C.sub, UDim2.fromOffset(65, 32), UDim2.new(1, -150, 0, 15))
+	local role = text(f, "Reading role…", 10, C.accent, UDim2.fromOffset(65, 51), UDim2.new(1, -150, 0, 14))
+	local inspect = create("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
+		Size = UDim2.fromOffset(65, 28), Text = "Inspect", TextSize = 10, Font = Enum.Font.GothamBold,
+		TextColor3 = C.accent, BackgroundColor3 = C.accentDim, AutoButtonColor = false, BorderSizePixel = 0 }, f); corner(inspect, 7)
+	-- Instance-owned connections disappear with this card, rather than accumulating in the global janitor.
+	inspect.MouseEnter:Connect(function() animate(inspect, { BackgroundColor3 = C.hover }) end)
+	inspect.MouseLeave:Connect(function() animate(inspect, { BackgroundColor3 = C.accentDim }) end)
+	inspect.Activated:Connect(function()
+		selectedPlayer = plr
+		-- Use the same tab activation path as navigation.
+		API.SelectTab("settings")
+	end)
+	playerCards[plr] = { frame = f, role = role }
+end
+local function refreshRoster()
+	local count, needle = 0, search.Text:lower()
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if not playerCards[plr] then playerCard(plr) end
+		local card = playerCards[plr]
+		local name, kind = roleFor(plr)
+		card.role.Text = heroLabel(name, kind); card.role.TextColor3 = name and heroColor(name) or C.faint
+		local haystack = (plr.Name .. " " .. plr.DisplayName .. " " .. (name or "")):lower()
+		card.frame.Visible = needle == "" or haystack:find(needle, 1, true) ~= nil
+		if card.frame.Visible then count += 1 end
+	end
+	empty.Visible = count == 0
+end
+connect(search:GetPropertyChangedSignal("Text"), refreshRoster)
+
+local appearance = section(settings, "Appearance", "A warm accent over neutral charcoal surfaces.")
+toggle(appearance, "Interface animations", "Smooth hover, navigation and window transitions.", true, function(v) motion = v end)
+local diagnostics = section(settings, "Hero detection", "Inspect a player in the Players tab to see their role source.")
+local diagnosticSummary = text(diagnostics, "", 11, C.accent, nil, UDim2.new(1, 0, 0, 21), true)
+local reportBox = create("TextBox", { Size = UDim2.new(1, 0, 0, 170), BackgroundColor3 = C.base, BorderSizePixel = 0,
+	Text = "", TextEditable = false, ClearTextOnFocus = false, MultiLine = true, TextWrapped = true,
+	TextSize = 10, Font = Enum.Font.Code, TextColor3 = C.sub, TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Top }, diagnostics)
+corner(reportBox, 7)
+create("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 9), PaddingBottom = UDim.new(0, 9) }, reportBox)
+local lastReport = ""
+local function collectReplicatedFields(plr)
+	-- On-demand diagnostics only. Include unfamiliar field names so the actual
+	-- schema can be identified without assuming that it calls its roles "Hero".
+	local lines, truncated = {}, false
+	local function add(line)
+		if #lines < 200 then table.insert(lines, line) else truncated = true end
+	end
+	local function printable(value)
+		return tostring(value):gsub("[\r\n]", " "):sub(1, 180)
+	end
+	local function walk(root, budget)
+		if not root then return end
+		local queue, cursor = { root }, 1
+		while cursor <= #queue and cursor <= budget do
+			local node = queue[cursor]; cursor += 1
+			if not excluded(node) and not node:IsA("PlayerGui") and not node:IsA("PlayerScripts") then
+				local path = pathOf(node)
+				local keys, attributes = {}, node:GetAttributes()
+				for key in pairs(attributes) do table.insert(keys, key) end
+				table.sort(keys)
+				for _, key in ipairs(keys) do add(path .. ".@" .. key .. " = " .. printable(attributes[key])) end
+				if node:IsA("StringValue") or node:IsA("IntValue") or node:IsA("NumberValue") or node:IsA("BoolValue") then
+					add(path .. " [" .. node.ClassName .. "] = " .. printable(node.Value))
+				elseif node:IsA("ObjectValue") then
+					add(path .. " [ObjectValue] -> " .. (node.Value and pathOf(node.Value) or "nil"))
+				elseif node:IsA("Folder") or node:IsA("Model") or node:IsA("Tool") or node:IsA("Configuration") then
+					add(path .. " [" .. node.ClassName .. "]")
+				end
+				for _, child in ipairs(node:GetChildren()) do
+					if #queue < budget then table.insert(queue, child) else truncated = true end
+				end
+			end
+		end
+	end
+	walk(plr.Character, 1200); walk(plr, 500)
+	if #lines == 0 then table.insert(lines, "No replicated attributes or value objects found.") end
+	if truncated then table.insert(lines, "[Report limit reached; some fields were omitted.]") end
+	return table.concat(lines, "\n")
+end
+local function report(plr)
+	plr = plr or LocalPlayer
+	local name, source, evidence, scanned, kind = resolveHero(plr, true)
+	local lines = { "Rift Hub / Superhero Arena / v" .. API.Version, "Player: @" .. plr.Name,
+		"Hero: " .. (name and heroLabel(name, kind) or "Not found in replicated data"), "Source: " .. (source or "None"),
+		"Mapping: " .. (kind or "unavailable"),
+		"Instances inspected: " .. scanned, "", "Candidate fields:" }
+	for i, item in ipairs(evidence) do
+		if i > 20 then break end
+		local suffix = item.kind == "guess" and (" -> " .. item.hero .. " [guess; not verified]")
+			or item.unmapped and " [game identifier; hero name not mapped]"
+			or (item.hero and (" -> " .. item.hero) or " [not a roster hero]")
+		table.insert(lines, item.path .. " = " .. item.raw .. suffix)
+	end
+	if #evidence == 0 then table.insert(lines, "No hero fields found.") end
+	if name and not HERO_COLORS[name] then
+		table.insert(lines, "\nThe game reports the identifier '" .. name .. "'. Its matching hero name is not confirmed yet.")
+	end
+	table.insert(lines, "\nReplicated data (including unfamiliar field names):")
+	table.insert(lines, collectReplicatedFields(plr))
+	if not name then
+		table.insert(lines, "\nCopy this report and state which hero this player is using. The actual game field or numeric mapping still needs to be identified. Some data may exist only on the server.")
+	end
+	return table.concat(lines, "\n"), name, kind
+end
+refreshDiagnostics = function()
+	if not selectedPlayer.Parent then selectedPlayer = LocalPlayer end
+	local name, kind
+	lastReport, name, kind = report(selectedPlayer)
+	diagnosticSummary.Text = "@" .. selectedPlayer.Name .. "  /  " .. (name and heroLabel(name, kind) or "Not detected")
+	reportBox.Text = lastReport
+end
+local function copyReport(value)
+	if type(setclipboard) == "function" then
+		local ok = pcall(setclipboard, value)
+		footer.Text = ok and "Report copied" or "Clipboard unavailable; report printed to console"
+		if not ok then print(value) end
+	else print(value); footer.Text = "Report printed to console" end
+end
+local function heroMenuReport()
+	-- Inspect labels and nearby metadata only. Do not execute game modules or
+	-- assign aliases from shared containers that might describe several heroes.
+	local lines = { "Rift Hub / Hero menu / v" .. API.Version,
+		"Confirmed aliases: Water = Aquaman; Earth = Hulk; Knight = Thor; Samurai = Deadpool; Nature = Groot.",
+		"Open the game's hero selection menu before copying this report.", "" }
+	local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	if not pg then table.insert(lines, "PlayerGui is unavailable."); return table.concat(lines, "\n") end
+	local queue, cursor, found, emitted, truncated = { pg }, 1, 0, {}, false
+	local function clean(raw) return tostring(raw):gsub("[\r\n]", " "):sub(1, 180) end
+	local function add(line)
+		if #lines < 350 then table.insert(lines, line) else truncated = true end
+	end
+	while cursor <= #queue and cursor <= 5000 do
+		local node = queue[cursor]; cursor += 1
+		if not excluded(node) then
+			if (node:IsA("TextLabel") or node:IsA("TextButton")) and canonical(node.Text) then
+				found += 1
+				add("Label: " .. clean(node.Text) .. " | " .. pathOf(node))
+				local scope = node
+				for _ = 1, 4 do
+					if not scope or scope:IsA("ScreenGui") or scope:IsA("PlayerGui") then break end
+					if not emitted[scope] then
+						emitted[scope] = true
+						add("  " .. pathOf(scope) .. " [" .. scope.ClassName .. "]")
+						local keys, attrs = {}, scope:GetAttributes()
+						for key in pairs(attrs) do table.insert(keys, key) end
+						table.sort(keys)
+						for _, key in ipairs(keys) do add("    @" .. key .. " = " .. clean(attrs[key])) end
+						for _, child in ipairs(scope:GetChildren()) do
+							local value = readValue(child)
+							if value ~= nil then add("    " .. child.Name .. " [" .. child.ClassName .. "] = " .. clean(value)) end
+						end
+					end
+					scope = scope.Parent
+				end
+			end
+			for _, child in ipairs(node:GetChildren()) do
+				if #queue < 5000 then table.insert(queue, child) else truncated = true end
+			end
+		end
+	end
+	add("\nHero labels found: " .. found)
+	if found == 0 then add("Open the hero selection menu, then copy this report again.") end
+	if truncated then table.insert(lines, "[Report limit reached; some menu data was omitted.]") end
+	return table.concat(lines, "\n")
+end
+action(diagnostics, "Refresh selected player's role", function() refreshHero(selectedPlayer); refreshDiagnostics(); footer.Text = "Role source refreshed" end)
+action(diagnostics, "Copy full detection report", function()
+	refreshDiagnostics()
+	copyReport(lastReport)
+end, true)
+action(diagnostics, "Copy hero menu report", function()
+	lastReport = heroMenuReport(); reportBox.Text = lastReport
+	diagnosticSummary.Text = "Hero selection menu report"; copyReport(lastReport)
+end)
+action(settings, "Unload Rift Hub", API.Unload)
+
+-- One selection path for clicks and programmatic navigation.
+function API.SelectTab(id)
+	if not pages[id] then return end
+	currentTab = id; pageTitle.Text = pages[id].title
+	for key, p in pairs(pages) do
+		local selected, t = key == id, tabs[key]
+		p.group.Visible = selected; t.marker.Visible = selected
+		animate(t.button, { BackgroundColor3 = selected and C.accentDim or C.panel })
+		animate(t.label, { TextColor3 = selected and C.ink or C.sub })
+		animate(t.icon, { GroupColor3 = selected and C.accent or C.sub })
+		animate(t.stroke, { Transparency = selected and 0.4 or 1 })
+		if selected then
+			p.group.GroupTransparency = motion and 0.5 or 0; p.group.Position = UDim2.fromOffset(0, motion and 7 or 0)
+			animate(p.group, { GroupTransparency = 0, Position = UDim2.new() }, 0.24)
+		end
+	end
+	if id == "settings" then refreshDiagnostics() elseif id == "players" then refreshRoster() end
+end
+
+local bubble = create("TextButton", { Name = "RiftSHA_Logo", AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.new(0, 48, 0.5, 0), Size = UDim2.fromOffset(52, 52), BackgroundColor3 = C.panel,
+	Text = "R", Font = Enum.Font.GothamBold, TextSize = 24, TextColor3 = C.accent,
+	AutoButtonColor = false, BorderSizePixel = 0, Visible = false }, gui)
+corner(bubble, 15); border(bubble, C.accent, 0.2)
+local bubbleScale = create("UIScale", { Scale = 1 }, bubble)
+connect(bubble.MouseEnter, function() animate(bubbleScale, { Scale = 1.06 }) end)
+connect(bubble.MouseLeave, function() animate(bubbleScale, { Scale = 1 }) end)
+local windowToken = 0
+local function setMinimized(value)
+	if not alive or minimized == value then return end
+	minimized = value; windowToken += 1
+	local token = windowToken
+	activeSlider = nil; drag = nil
+	if value then
+		animate(shell, { GroupTransparency = 1 }, 0.14); animate(shellScale, { Scale = 0.97 }, 0.14)
+		task.delay(motion and 0.14 or 0, function()
+			if alive and windowToken == token then root.Visible = false; bubble.Visible = true end
+		end)
+	else
+		bubble.Visible = false; root.Visible = true
+		animate(shell, { GroupTransparency = 0 }, 0.24); animate(shellScale, { Scale = 1 }, 0.24)
 	end
 end
-slider(skillGroup,"Skill Interval",0.2,5,Config.SkillInterval,function(v) return string.format("%.2f s",v) end,function(v) Config.SkillInterval=v end)
-action(skillGroup,"Use All Available Skills",function()
-	local count=0
-	for slot=1,4 do local skill=Controls.Skills[slot]; Config.SkillSlots[slot]=skill~=nil and skill.Control~=nil; if Config.SkillSlots[slot] then count+=1 end end
-	Config.AutoSkills=count>0; skillMaster.Set(Config.AutoSkills,true); API.OnSkills()
-	status(count>0 and ("Enabled "..count.." available skills") or "No native skill controls detected")
-end)
-action(skillGroup,"Dash Now",function() local ok,err=API.DashNow(); status(ok and "Dash requested" or ("Dash: "..tostring(err))) end)
 
-local mobility=section(movement,"Movement Enhancements")
-action(mobility,"Infinite Dash · Unavailable",API.SetInfiniteDash)
-toggle(mobility,"Auto Dash","Requests the game's dash at this interval.",false,function(v) Config.AutoDash=v end)
-slider(mobility,"Dash Interval",0.2,5,Config.DashInterval,function(v) return string.format("%.2f s",v) end,function(v) Config.DashInterval=v end)
-toggle(mobility,"Infinite Jump","Allow repeated jump requests while airborne.",false,function(v) Config.AirJump=v end)
-toggle(mobility,"WalkSpeed","Apply the speed selected below.",false,function(v) Config.Speed=v; maintenance() end)
-slider(mobility,"WalkSpeed",8,80,Config.SpeedValue,function(v) return string.format("%.0f",v) end,function(v) Config.SpeedValue=v end)
-local display=section(visuals,"ESP & Visual Features")
-toggle(display,"Player ESP","Player name and hero labels.",false,function(v) Config.ESP=v; maintenance() end)
-toggle(display,"Player Highlights","Highlight other player characters.",false,function(v) Config.Highlights=v; maintenance() end)
-toggle(display,"Fullbright","Improve visibility; restore lighting when disabled.",false,function(v) Config.Fullbright=v; maintenance() end)
-local session=section(server,"Server Utility")
-action(session,"Rejoin Server",function()
-	local ok,err=pcall(function()
-		local teleport=game:GetService("TeleportService")
-		if game.JobId and game.JobId~="" then teleport:TeleportToPlaceInstance(game.PlaceId,game.JobId,LocalPlayer)
-		else teleport:Teleport(game.PlaceId,LocalPlayer) end
-	end)
-	status(ok and "Rejoining server…" or ("Rejoin failed: "..tostring(err)))
-end)
-
-local bubble=create("TextButton",{Name="RiftSHA_Logo",Size=UDim2.fromOffset(48,48),AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.new(0,38,0.5,0),BackgroundColor3=C.panel,TextColor3=C.accent,Text="R",Font=Enum.Font.GothamBold,TextSize=22,BorderSizePixel=0,Visible=false,AutoButtonColor=false},gui)
-corner(bubble,12); border(bubble,C.accent)
-function API.SetMinimized(value)
-	minimized=value==true; root.Visible=not minimized; bubble.Visible=minimized
-	if not minimized then pauseActions() end
+local suppressBubbleClickUntil = 0
+local function viewport()
+	return workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
 end
-connect(minimize.Activated,function() API.SetMinimized(true) end)
-connect(bubble.Activated,function() if not API.SuppressBubble then API.SetMinimized(false) end end)
-connect(close.Activated,API.Unload)
-connect(Input.InputBegan,function(input,processed)
-	if not processed and not Input:GetFocusedTextBox() and input.KeyCode==Enum.KeyCode.RightShift then API.SetMinimized(not minimized) end
-end)
-local function draggable(handle,target)
-	connect(handle.InputBegan,function(input)
-		if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then
-			drag={input=input,target=target,start=input.Position,origin=target.Position}; API.SuppressBubble=false
-		end
+local function clampTarget(target, point)
+	local view, size = viewport(), target.AbsoluteSize
+	local halfX, halfY = math.min(size.X/2+8, view.X/2), math.min(size.Y/2+8, view.Y/2)
+	return Vector2.new(math.clamp(point.X, halfX, view.X-halfX), math.clamp(point.Y, halfY, view.Y-halfY))
+end
+local function draggable(handle, target)
+	connect(handle.InputBegan, function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+		local view = viewport()
+		local pos = target.Position
+		drag = { input = input, target = target, start = Vector2.new(input.Position.X, input.Position.Y), moved = false,
+			origin = Vector2.new(pos.X.Scale*view.X+pos.X.Offset, pos.Y.Scale*view.Y+pos.Y.Offset) }
 	end)
 end
-draggable(header,root); draggable(bubble,bubble)
-connect(Input.InputChanged,function(input)
-	if activeSlider and (input==activeSlider.input or input.UserInputType==Enum.UserInputType.MouseMovement and activeSlider.input.UserInputType==Enum.UserInputType.MouseButton1) then activeSlider.move(input.Position.X) end
-	if drag and (input==drag.input or input.UserInputType==Enum.UserInputType.MouseMovement and drag.input.UserInputType==Enum.UserInputType.MouseButton1) then
-		local d=input.Position-drag.start; if d.Magnitude>5 then API.SuppressBubble=true end
-		local camera=workspace.CurrentCamera
-		if camera then
-			local view=camera.ViewportSize; local size=drag.target.AbsoluteSize
-			local halfX=math.min(size.X/2+4,view.X/2); local halfY=math.min(size.Y/2+4,view.Y/2)
-			local x=drag.origin.X.Scale*view.X+drag.origin.X.Offset+d.X
-			local y=drag.origin.Y.Scale*view.Y+drag.origin.Y.Offset+d.Y
-			drag.target.Position=UDim2.fromOffset(math.clamp(x,halfX,view.X-halfX),math.clamp(y,halfY,view.Y-halfY))
-		end
+draggable(dragHandle, root); draggable(brand, root); brand.Active = true
+draggable(bubble, bubble)
+connect(Input.InputChanged, function(input)
+	local mouse = input.UserInputType == Enum.UserInputType.MouseMovement
+	if activeSlider and (mouse and activeSlider.input.UserInputType == Enum.UserInputType.MouseButton1 or input == activeSlider.input) then activeSlider.move(input.Position.X) end
+	if drag and (mouse and drag.input.UserInputType == Enum.UserInputType.MouseButton1 or input == drag.input) then
+		local delta = Vector2.new(input.Position.X, input.Position.Y)-drag.start
+		if delta.Magnitude > 5 then drag.moved = true end
+		local p = clampTarget(drag.target, drag.origin+delta)
+		drag.target.Position = UDim2.fromOffset(p.X, p.Y)
 	end
 end)
-connect(Input.InputEnded,function(input)
-	if activeSlider and input==activeSlider.input then activeSlider=nil end
-	if drag and input==drag.input then drag=nil; task.delay(0.15,function() if alive then API.SuppressBubble=false end end) end
+connect(Input.InputEnded, function(input)
+	if activeSlider and input == activeSlider.input then activeSlider = nil end
+	if drag and input == drag.input then
+		if drag.target == bubble and drag.moved then suppressBubbleClickUntil = os.clock()+0.25 end
+		drag = nil
+	end
 end)
-connect(Input.WindowFocusReleased,function() activeSlider=nil; drag=nil end)
-local lastView
+connect(bubble.Activated, function()
+	if not (drag and drag.target == bubble and drag.moved) and os.clock() >= suppressBubbleClickUntil then setMinimized(false) end
+end)
+connect(Input.WindowFocusReleased, function()
+	activeSlider = nil; drag = nil
+end)
+connect(minimize.Activated, function() setMinimized(true) end)
+connect(close.Activated, API.Unload)
+connect(Input.InputBegan, function(input, processed)
+	if input.KeyCode == Enum.KeyCode.F8 then API.EmergencyStop(); return end
+	if not processed and not Input:GetFocusedTextBox() then
+		if input.KeyCode == Enum.KeyCode.RightShift then setMinimized(not minimized) end
+	end
+end)
+
+local lastView = Vector2.new()
 local function fitWindow()
-	local camera=workspace.CurrentCamera; if not camera then return end
-	local view=camera.ViewportSize; if view==lastView then return end; lastView=view
-	local width=math.max(260,math.min(680,view.X-24)); local height=math.max(230,math.min(460,view.Y-24))
-	root.Size=UDim2.fromOffset(width,height)
-	local side=width<500 and 94 or 128
-	nav.Size=UDim2.new(0,side,1,-106); content.Position=UDim2.fromOffset(side+20,66); content.Size=UDim2.new(1,-side-30,1,-103)
-	root.Position=UDim2.fromScale(0.5,0.5)
+	local view = viewport()
+	if view == lastView then return end
+	lastView = view
+	uiScale.Scale = math.min(1, math.max(0.1, (view.X-24)/740), math.max(0.1, (view.Y-24)/500))
+	for _, target in ipairs({ root, bubble }) do
+		local pos = target.Position
+		local p = clampTarget(target, Vector2.new(pos.X.Scale*view.X+pos.X.Offset, pos.Y.Scale*view.Y+pos.Y.Offset))
+		target.Position = UDim2.fromOffset(p.X, p.Y)
+	end
 end
-connect(RunService.RenderStepped,fitWindow)
-connect(gui.Destroying,function() if alive then API.Unload() end end)
-API.Gui=gui; API.HeroColors=HERO_COLORS; API.ResolveHero=function(plr) return resolveHero(plr or LocalPlayer,true) end
-API.RefreshControls(); API.SelectTab("combat"); fitWindow()
-print("[Rift Hub] Superhero Arena 3.0 · RightShift minimizes. Native cooldowns and server hit validation apply.")
+connect(Players.PlayerRemoving, function(plr)
+	destroyRow(plr); heroCache[plr] = nil
+	local card = playerCards[plr]
+	if card then card.frame:Destroy(); playerCards[plr] = nil end
+	if selectedPlayer == plr then selectedPlayer = LocalPlayer end
+end)
+Automation.MenuOpen = function() return not minimized end
+local roleTimer, menuTimer = 0, 0
+connect(RunService.Heartbeat, function(dt)
+	Automation.Step(dt); Extras.Step()
+	menuTimer += dt
+	if menuTimer >= 5 then menuTimer = 0; scanMenuMappings() end
+	roleTimer += dt
+	if roleTimer < 1 then return end
+	roleTimer = 0
+	for _, plr in ipairs(Players:GetPlayers()) do refreshHero(plr) end
+	playerCount.Text = tostring(#Players:GetPlayers())
+	local name, kind = roleFor(LocalPlayer)
+	ownRole.Text = name and heroLabel(name, kind) or "Not detected"; ownRole.TextColor3 = name and heroColor(name) or C.sub
+	if currentTab == "players" and not minimized then refreshRoster() end
+	footer.Text = ESP.Config.Enabled and "ESP active  ·  Hero colors synced" or "Ready  ·  ESP off"
+end)
+RunService:BindToRenderStep("RiftSHA_TargetLock", Enum.RenderPriority.Camera.Value+1, Aim.Step)
+connect(RunService.PreSimulation, Movement.Step)
+connect(RunService.RenderStepped, function()
+	fitWindow()
+	local camera = workspace.CurrentCamera
+	if not ESP.Config.Enabled or not camera then
+		for _, row in pairs(rows) do hideRow(row) end
+		return
+	end
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= LocalPlayer then updateRow(plr, rows[plr] or makeRow(plr), camera) end
+	end
+end)
+connect(gui.Destroying, function() if alive then API.Unload() end end)
+
+function API.DumpHeroSources(plr)
+	local result = report(plr or LocalPlayer)
+	print(result)
+	return result
+end
+function API.ResolveHero(plr) return resolveHero(plr or LocalPlayer, true) end
+API.HeroMenuReport = heroMenuReport
+function API.SetGuessing(value)
+	allowHeroGuesses = value == true
+	for _, plr in ipairs(Players:GetPlayers()) do refreshHero(plr) end
+end
+API.ScanHeroMenu = scanMenuMappings
+API.SetESP = setESP
+API.SetMinimized = setMinimized
+API.Gui = gui
+scanMenuMappings()
+for _, plr in ipairs(Players:GetPlayers()) do refreshHero(plr) end
+playerCount.Text = tostring(#Players:GetPlayers())
+do
+	local name, kind = roleFor(LocalPlayer)
+	ownRole.Text = name and heroLabel(name, kind) or "Not detected"
+	ownRole.TextColor3 = name and heroColor(name) or C.sub
+end
+API.SelectTab("home"); refreshDiagnostics(); fitWindow()
+animate(shell, { GroupTransparency = 0 }, 0.3); animate(shellScale, { Scale = 1 }, 0.3)
+print("[Rift Hub] Superhero Arena ready. RightShift minimizes. Players > Inspect shows hero detection sources.")
 return API

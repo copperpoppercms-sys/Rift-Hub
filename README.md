@@ -18,7 +18,7 @@ The **Hub → Murder Mystery 2 → Execute** button opens the separate MM2 scrip
 - `assets/` includes the saved video frame packs, audio, welcome background and source media.
 - `src/ui/GameLibrary.lua` opens the separate MM2 script and unloads the universal hub on a successful handoff. Failed startup cleans up and reopens the hub.
 - `games/mm2.lua` is a forwarding loader; the full MM2 implementation belongs only in the separate MM2 repo.
-- `games/superhero-arena.lua` contains the focused v3.0 standalone Superhero Arena hub, containing Combat, Hero Skills, Movement, Visuals and Server sections. See `docs/SuperheroArena.md`. Its game/place ID has not been supplied, so it is bundled as standalone source rather than an unverified catalogue entry.
+- `games/superhero-arena.lua` contains the latest v2.13 standalone Superhero Arena hub, including its combat/farming control adapters, movement, visuals and diagnostics. See `docs/SuperheroArena.md`. Its game/place ID has not been supplied, so it is bundled as standalone source rather than an unverified catalogue entry.
 
 ## Validation
 
