@@ -1,4 +1,4 @@
-"""Compile the standalone file, then run mocked Roblox role and lifecycle checks.
+"""Compile and check the forwarding loader. Full gameplay tests live in the separate repo.
 
 Set LUAU_BIN and LUAU_COMPILE_BIN if the standalone Luau tools are not on PATH.
 This cannot verify the live game's data schema or reproduce Roblox rendering.

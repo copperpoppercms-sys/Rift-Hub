@@ -17,6 +17,8 @@ hub = (root / 'src/ui/Hub.lua').read_text()
 assert 'label = "Hub", icon = "hub"' in hub
 assert 'Size = UDim2.fromOffset(320, 144)' in hub
 assert 'Size = UDim2.fromOffset(40, 40)' in hub
+assert 'CellSize = UDim2.fromOffset(320, 144)' in hub and 'FillDirectionMaxCells = 2' in hub
+assert 'Text = item.Handoff' in hub
 with tempfile.TemporaryDirectory() as directory:
     directory = Path(directory)
     for file in [root/'games/mm2.lua', root/'src/ui/Hub.lua', root/'src/ui/Kit.lua', root/'src/ui/GameLibrary.lua', root/'main.lua']:

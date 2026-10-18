@@ -186,11 +186,19 @@ local function buildHub(panel, ctx)
 		return
 	end
 	local library = ctx.GameLibrary(ctx)
+	local rows = math.ceil(#library.Games / 2)
+	local cards = Kit.create("Frame", {
+		Name = "GameCards", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, rows * 156 - 12), BackgroundTransparency = 1,
+	}, scroller)
+	Kit.create("UIGridLayout", {
+		SortOrder = Enum.SortOrder.LayoutOrder, CellSize = UDim2.fromOffset(320, 144),
+		CellPadding = UDim2.fromOffset(12, 12), FillDirectionMaxCells = 2,
+	}, cards)
 	for order, item in ipairs(library.Games) do
 		local tile = Kit.create("Frame", {
 			Name = item.Id, LayoutOrder = order + 1, Size = UDim2.fromOffset(320, 144),
 			BackgroundColor3 = Kit.PANEL, BorderSizePixel = 0,
-		}, scroller)
+		}, cards)
 		Kit.create("UICorner", { CornerRadius = UDim.new(0, 12) }, tile)
 		Kit.create("UIStroke", { Color = Kit.BORDER, Transparency = 0.3, Thickness = 1 }, tile)
 		Kit.Surface(tile)
@@ -219,7 +227,7 @@ local function buildHub(panel, ctx)
 		local status = Kit.create("TextLabel", {
 			Position = UDim2.fromOffset(14, 110), Size = UDim2.new(1, -28, 0, 18), BackgroundTransparency = 1,
 			FontFace = Kit.face("BuilderSans"), TextSize = 10, TextColor3 = Kit.FAINT,
-			TextXAlignment = Enum.TextXAlignment.Left, Text = "Opens MM2 and closes hub",
+			TextXAlignment = Enum.TextXAlignment.Left, Text = item.Handoff,
 		}, tile)
 		local loading = false
 		ctx.Janitor.add(execute.Activated:Connect(function()

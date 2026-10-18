@@ -3,8 +3,9 @@ local env = {}
 local warn = function() end
 local getgenv = function() return env end
 local game = { PlaceId = 142823291, GameId = 66654135 }
-local source, fetchError, fetchHook
-function game:HttpGet()
+local source, fetchError, fetchHook,lastUrl
+function game:HttpGet(url)
+	lastUrl=url
 	if fetchHook then fetchHook() end
 	if fetchError then error("network failed") end
 	return source
@@ -61,6 +62,38 @@ fetchHook = nil
 game.PlaceId, game.GameId = 1, 1; m, state = controller()
 assert(not m.Execute(m.Games[1])); closed, restarted, open = state(); assert(closed == 0 and open, "wrong-game launch closed the hub")
 print("PASS: MM2 handoff, network/compile failures, runtime rollback, duplicate clicks, cancelled loading, and wrong-game protection.")
+
+-- Superhero Arena uses a distinct repository, game guard, icon and cleanup.
+m,state=controller(); local hero=m.Games[2]
+assert(#m.Games==2 and hero.Id=="superhero-arena")
+assert(hero.PlaceId==78710221869926 and hero.UniverseId==10765491459)
+assert(hero.Url=="https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-Superhero-Arena/main/main.lua")
+assert(hero.IconUrl:find("Rift-Hub-Superhero-Arena/main/assets/superhero_arena_icon.png",1,true))
+assert(hero.Handoff=="Opens Superhero Arena and closes hub")
+assert(not m.Execute(hero)); closed,restarted,open=state(); assert(closed==0 and open and m.Status=="Open Superhero Arena first")
+game.PlaceId,game.GameId=hero.PlaceId,hero.UniverseId
+source="return {Game='Superhero Arena',Gui={Parent=true},Enabled=false}"
+m,state=controller(); assert(m.Execute(m.Games[2]))
+closed,restarted,open=state(); assert(closed==1 and not open and restarted==0)
+assert(lastUrl:find("Rift-Hub-Superhero-Arena/main/main.lua?cb=",1,true) and m.Status=="Superhero Arena open")
+-- Subplaces in the same universe are accepted.
+game.PlaceId=1; m,state=controller(); assert(m.Execute(m.Games[2]))
+-- Wrong script/failed startup must close the partial panel and reopen the main hub.
+local heroCleanup=0
+env.SuperheroArenaHub={Unload=function() heroCleanup+=1 end}
+source="return {Game='Murder Mystery 2',Gui={Parent=true}}"
+m,state=controller(); assert(not m.Execute(m.Games[2]))
+closed,restarted,open=state(); assert(closed==1 and restarted==1 and open and heroCleanup==1)
+fetchError=true; m,state=controller(); assert(not m.Execute(m.Games[2])); closed,restarted,open=state(); assert(closed==0 and open)
+fetchError=false; source="return {Game='Superhero Arena',Gui={Parent=true}}"
+m,state=controller(); fetchHook=function() m.Dispose() end
+assert(not m.Execute(m.Games[2])); closed,restarted,open=state(); assert(closed==0 and open)
+fetchHook=nil
+m,state=controller(); duplicateResult=nil
+fetchHook=function() duplicateResult=m.Execute(m.Games[2]) end
+assert(m.Execute(m.Games[2]) and duplicateResult==false); fetchHook=nil
+m,state=controller(); assert(not m.Execute({Url=hero.Url})); closed,restarted,open=state(); assert(closed==0 and open)
+print("PASS: Superhero Arena repository, game IDs, handoff, rollback, cancellation and duplicate protection.")
 
 -- Slider/keybind handlers must disappear when the main window is destroyed.
 local function signal()
