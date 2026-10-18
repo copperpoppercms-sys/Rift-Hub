@@ -253,6 +253,75 @@ local function buildHub(panel, ctx)
 	end
 end
 
+-- Character cards are a UI preview only; powers will be implemented separately.
+local function buildHeroVillain(panel, ctx)
+	local Kit = ctx.Kit
+	local scroller = Kit.Scroller(panel)
+	Kit.create("TextLabel", {
+		LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1,
+		FontFace = Kit.face("BuilderSans", Enum.FontWeight.Bold), TextSize = 22, TextColor3 = Kit.INK,
+		TextXAlignment = Enum.TextXAlignment.Left, Text = "Hero / Villain",
+	}, scroller)
+	local cards = Kit.create("Frame", {
+		Name = "CharacterCards", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 156), BackgroundTransparency = 1,
+	}, scroller)
+	local grid = Kit.create("UIGridLayout", {
+		SortOrder = Enum.SortOrder.LayoutOrder, CellSize = UDim2.new(0.5, -6, 0, 156),
+		CellPadding = UDim2.fromOffset(12, 12), FillDirectionMaxCells = 2,
+	}, cards)
+	local green = Color3.fromRGB(106, 194, 119)
+	local tile = Kit.create("Frame", {
+		Name = "HulkCard", LayoutOrder = 1, Size = UDim2.fromOffset(320, 156), BackgroundColor3 = Kit.PANEL,
+		BorderSizePixel = 0,
+	}, cards)
+	Kit.create("UICorner", { CornerRadius = UDim.new(0, 12) }, tile)
+	local rim = Kit.create("UIStroke", { Color = Kit.BORDER, Transparency = 0.25, Thickness = 1 }, tile)
+	Kit.Surface(tile)
+	local image = Kit.create("ImageLabel", {
+		Position = UDim2.fromOffset(14, 14), Size = UDim2.fromOffset(40, 40),
+		BackgroundColor3 = Kit.VOID, BorderSizePixel = 0, ScaleType = Enum.ScaleType.Fit,
+		Image = "rbxthumb://type=GameIcon&id=10742937135&w=150&h=150",
+	}, tile)
+	Kit.create("UICorner", { CornerRadius = UDim.new(0, 9) }, image)
+	Kit.create("TextLabel", {
+		Position = UDim2.fromOffset(66, 13), Size = UDim2.new(1, -80, 0, 22), BackgroundTransparency = 1,
+		FontFace = Kit.face("BuilderSans", Enum.FontWeight.Medium), TextSize = 14, TextColor3 = Kit.INK,
+		TextXAlignment = Enum.TextXAlignment.Left, Text = "Hulk",
+	}, tile)
+	Kit.create("TextLabel", {
+		Position = UDim2.fromOffset(66, 38), Size = UDim2.new(1, -80, 0, 16), BackgroundTransparency = 1,
+		FontFace = Kit.face("BuilderSans"), TextSize = 12, TextColor3 = green,
+		TextXAlignment = Enum.TextXAlignment.Left, Text = "huge rage",
+	}, tile)
+	local button = Kit.create("TextButton", {
+		Name = "Exterminate", Position = UDim2.fromOffset(14, 68), Size = UDim2.fromOffset(118, 34),
+		BackgroundColor3 = Color3.fromRGB(50, 107, 64), BorderSizePixel = 0, AutoButtonColor = false,
+		FontFace = Kit.face("BuilderSans", Enum.FontWeight.Medium), TextSize = 12, TextColor3 = Kit.INK,
+		Text = "Exterminate",
+	}, tile)
+	Kit.create("UICorner", { CornerRadius = UDim.new(0, 8) }, button)
+	local status = Kit.create("TextLabel", {
+		Name = "HulkPreviewStatus", Position = UDim2.fromOffset(14, 115), Size = UDim2.new(1, -28, 0, 28),
+		BackgroundTransparency = 1, FontFace = Kit.face("BuilderSans"), TextSize = 10, TextColor3 = Kit.FAINT,
+		TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = "Coming soon",
+	}, tile)
+	-- Deliberately no loader or gameplay action: this button only acknowledges the preview.
+	ctx.Janitor.add(button.Activated:Connect(function()
+		Kit.Click()
+		status.Text = "Hulk powers coming soon."
+	end))
+	ctx.Janitor.add(tile.MouseEnter:Connect(function() Kit.tween(rim, { Color = green, Transparency = 0.05 }, 0.14) end))
+	ctx.Janitor.add(tile.MouseLeave:Connect(function() Kit.tween(rim, { Color = Kit.BORDER, Transparency = 0.25 }, 0.14) end))
+	local function resize()
+		local width = cards.AbsoluteSize.X / math.max(ctx.Zoom.Scale, 0.01)
+		local columns = width >= 580 and 2 or 1
+		grid.CellSize = UDim2.new(1 / columns, columns == 2 and -6 or 0, 0, 156)
+	end
+	ctx.Janitor.add(cards:GetPropertyChangedSignal("AbsoluteSize"):Connect(resize))
+	ctx.Janitor.add(ctx.Zoom:GetPropertyChangedSignal("Scale"):Connect(resize))
+	resize()
+end
+
 local function buildCombat(panel, ctx)
 	local Kit = ctx.Kit
 	local AimAssist = ctx.Features.AimAssist
@@ -743,7 +812,7 @@ local function buildSettings(panel, ctx)
 			executorName = identifyexecutor()
 		end
 	end)
-	Kit.PlainRow(about, "Version", "2.0.0")
+	Kit.PlainRow(about, "Version", "2.1.0")
 	Kit.PlainRow(about, "Created by", "N0VA_0100")
 	Kit.PlainRow(about, "Executor", executorName)
 	Kit.PlainRow(about, "Place", ctx.PlaceName)
@@ -751,7 +820,7 @@ local function buildSettings(panel, ctx)
 	Kit.Button(about, "Copy diagnostics", nil, "Copy", function()
 		pcall(function()
 			local diag = string.format(
-				"Rift hub 2.0.0 | executor: %s | place: %s (%d) | players: %d/%d",
+				"Rift hub 2.1.0 | executor: %s | place: %s (%d) | players: %d/%d",
 				executorName, ctx.PlaceName, game.PlaceId, #Players:GetPlayers(), Players.MaxPlayers)
 			if type(setclipboard) == "function" then setclipboard(diag) end
 		end)
@@ -788,6 +857,7 @@ end
 local NAV = {
 	{ id = "home", label = "Home", icon = "home", build = buildHome },
 	{ id = "hub", label = "Hub", icon = "hub", build = buildHub },
+	{ id = "heroes", label = "Hero / Villain", icon = "heroes", build = buildHeroVillain },
 	{ id = "combat", label = "Combat", icon = "combat", group = "UNIVERSAL", build = buildCombat },
 	{ id = "visuals", label = "Visuals", icon = "visuals", group = "UNIVERSAL", build = buildVisuals },
 	{ id = "movement", label = "Movement", icon = "movement", group = "UNIVERSAL", build = buildMovement },

@@ -137,6 +137,11 @@ function Kit.Icon(name, parent)
 			Kit.create("UICorner", { CornerRadius = UDim.new(0, 1) }, part)
 			Kit.create("UIStroke", { Color = white, Thickness = 1.5 }, part)
 		end
+	elseif name == "heroes" then
+		-- A compact split shield for the Hero / Villain collection.
+		local points = { {10, 1.5}, {17, 4}, {16, 12}, {13.5, 16}, {10, 19}, {6.5, 16}, {4, 12}, {3, 4}, {10, 1.5} }
+		for i = 1, #points - 1 do line(points[i][1], points[i][2], points[i + 1][1], points[i + 1][2]) end
+		line(10, 5, 10, 15); line(7, 8, 13, 8)
 	elseif name == "combat" then
 		circle(10, 10, 11, true); circle(10, 10, 2)
 		line(10, 1, 10, 6); line(10, 14, 10, 19)
