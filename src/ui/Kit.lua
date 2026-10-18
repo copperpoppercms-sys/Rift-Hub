@@ -4,15 +4,16 @@ local UserInputService = game:GetService("UserInputService")
 
 local Kit = {}
 
--- Midnight charcoal, bone lettering, blood red, and candlelight orange.
-Kit.BASE, Kit.INK, Kit.SUB, Kit.FAINT, Kit.ACCENT = Color3.fromRGB(13, 12, 14), Color3.fromRGB(234, 224, 203),
-	Color3.fromRGB(181, 165, 151), Color3.fromRGB(144, 129, 121), Color3.fromRGB(176, 49, 43)
-Kit.PANEL = Color3.fromRGB(23, 19, 21)
-Kit.TRACK = Color3.fromRGB(44, 31, 33)
-Kit.BORDER = Color3.fromRGB(83, 48, 46)
-Kit.DANGER = Color3.fromRGB(233, 98, 76)
-Kit.CANDLE = Color3.fromRGB(208, 132, 64)
-Kit.VOID = Color3.fromRGB(8, 8, 10)
+-- Graphite surfaces, clear neutral lettering and a restrained violet accent.
+Kit.BASE, Kit.INK, Kit.SUB, Kit.FAINT, Kit.ACCENT = Color3.fromRGB(15, 16, 20), Color3.fromRGB(239, 240, 247),
+	Color3.fromRGB(171, 175, 191), Color3.fromRGB(123, 128, 147), Color3.fromRGB(118, 101, 216)
+Kit.PANEL = Color3.fromRGB(24, 26, 33)
+Kit.TRACK = Color3.fromRGB(38, 41, 52)
+Kit.BORDER = Color3.fromRGB(59, 63, 79)
+Kit.DANGER = Color3.fromRGB(231, 108, 125)
+Kit.CANDLE = Color3.fromRGB(169, 156, 244)
+Kit.VOID = Color3.fromRGB(10, 11, 15)
+Kit.ReduceMotion = false
 
 -- animation speed scales every tween this kit produces; Settings > Motion & sound > Animation speed writes here
 Kit.AnimSpeed = 1
@@ -46,7 +47,7 @@ function Kit.create(class, props, parent)
 end
 
 function Kit.tween(instance, props, time, style, dir)
-	local scaled = (time or 0.15) / math.max(Kit.AnimSpeed, 0.05)
+	local scaled = Kit.ReduceMotion and 0 or (time or 0.15) / math.max(Kit.AnimSpeed, 0.05)
 	local info = TweenInfo.new(scaled, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out)
 	local t = TweenService:Create(instance, info, props)
 	t:Play()
@@ -58,9 +59,9 @@ function Kit.Surface(parent)
 	return Kit.create("UIGradient", {
 		Rotation = 115,
 		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 247, 236)),
-			ColorSequenceKeypoint.new(0.58, Color3.fromRGB(204, 189, 191)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(155, 122, 129)),
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(248, 248, 255)),
+			ColorSequenceKeypoint.new(0.58, Color3.fromRGB(221, 223, 236)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(186, 190, 211)),
 		}),
 	}, parent)
 end

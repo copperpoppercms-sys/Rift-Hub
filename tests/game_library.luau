@@ -15,15 +15,15 @@ local LibraryCtor = (function()
 -- LIBRARY
 end)()
 local function controller()
-	local events, cleanup, restarts, open = {}, 0, 0, true
-	local ctx = { Janitor = { add = function(fn) table.insert(events, fn) end } }
+	local events, cleanup, restarts, open, history = {}, 0, 0, true, {}
+	local ctx = { Janitor = { add = function(fn) table.insert(events, fn) end }, LibraryState = { RecordLaunch = function(id) table.insert(history,id) end } }
 	ctx.Unload = function()
 		cleanup += 1; open = false
 		for _, fn in ipairs(events) do fn() end
 	end
 	ctx.Restart = function() restarts += 1; open = true end
 	local m = LibraryCtor(ctx)
-	return m, function() return cleanup, restarts, open end
+	return m, function() return cleanup, restarts, open, history end
 end
 source = "return {Game='Murder Mystery 2',Gui={Parent=true}}"
 local m, state = controller()
@@ -131,6 +131,18 @@ assert(not m.Execute(m.Games[3])); closed,restarted,open=state(); assert(closed=
 m,state=controller(); fetchHook=function() duplicateResult=m.Execute(m.Games[3]) end
 assert(m.Execute(m.Games[3]) and duplicateResult==false); fetchHook=nil
 print("PASS: Hulk card metadata, handoff, subplaces, fetch/compile/startup failure, isolated cleanup, cancellation and duplicate protection.")
+
+-- History must record a completed handoff, never a failed or cancelled launch.
+game.PlaceId,game.GameId=142823291,66654135
+source="return {Game='Murder Mystery 2',Gui={Parent=true}}"
+m,state=controller();assert(m.Execute(m.Games[1]))
+local _,_,_,history=state();assert(#history==1 and history[1]=="mm2")
+fetchError=true;m,state=controller();assert(not m.Execute(m.Games[1]));_,_,_,history=state();assert(#history==0)
+fetchError=false;source="return nil";m,state=controller();assert(not m.Execute(m.Games[1]));_,_,_,history=state();assert(#history==0)
+source="return {Game='Murder Mystery 2',Gui={Parent=true}}";m,state=controller()
+fetchHook=function() m.Dispose() end
+assert(not m.Execute(m.Games[1]));_,_,_,history=state();assert(#history==0);fetchHook=nil
+print("PASS: launch history is written only after the game window is validated.")
 
 -- Slider/keybind handlers must disappear when the main window is destroyed.
 local function signal()

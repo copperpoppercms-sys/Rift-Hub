@@ -57,6 +57,7 @@ Rift.Utils = loadModule("src/core/Utils.lua")
 Rift.Config = loadModule("src/core/Config.lua")
 
 if not Rift.Utils or not Rift.Config then
+	if type(getgenv) == "function" then getgenv().__RiftHubLoaded = false end
 	warn("[RiftHub] core modules failed to load, aborting")
 	return
 end
@@ -71,6 +72,11 @@ local function onReady()
 	local MakeIsland = loadModule("src/ui/Island.lua")
 	local HomeVideo = loadModule("src/ui/HomeVideo.lua")
 	local GameLibrary = loadModule("src/ui/GameLibrary.lua")
+	local LibraryStateCtor = loadModule("src/core/LibraryState.lua")
+	local LibraryView = loadModule("src/ui/LibraryView.lua")
+	local QuickSearch = loadModule("src/ui/QuickSearch.lua")
+	local LibraryState = LibraryStateCtor and LibraryStateCtor()
+	if Kit then Kit.ReduceMotion = LibraryState and LibraryState.ReducedMotion or false end
 
 	local AimAssistCtor = loadModule("src/features/AimAssist.lua")
 	local ESPCtor = loadModule("src/features/ESP.lua")
@@ -86,6 +92,7 @@ local function onReady()
 	local ServerToolsCtor = loadModule("src/features/ServerTools.lua")
 
 	if not (Kit and OpenHub and AimAssistCtor and ESPCtor and FlyCtor and AntiAFKCtor) then
+		if type(getgenv) == "function" then getgenv().__RiftHubLoaded = false end
 		warn("[RiftHub] UI modules failed to load, no window opened")
 		if getgenv then getgenv().Rift = Rift end
 		return
@@ -118,6 +125,7 @@ local function onReady()
 		Island = MakeIsland,
 		HomeVideo = HomeVideo,
 		GameLibrary = GameLibrary,
+		LibraryState = LibraryState, LibraryView = LibraryView, QuickSearch = QuickSearch,
 		OnRestart = onReady,
 		ToggleKey = Enum.KeyCode.RightShift,
 	})

@@ -8,7 +8,11 @@ Run the universal hub:
 loadstring(game:HttpGet("https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub/main/main.lua"))()
 ```
 
-The **Hub** tab shows **Murder Mystery 2**, **Superhero Arena** and **Survive The Hulk** cards in a compact two-column grid, each with its game icon and Execute button. Execute opens that game’s separate script and closes the universal hub. Join the selected game first; failed downloads leave the main hub open, and failed startup restores it. Superhero Arena opens its animated Combat, Visuals and Settings interface with Auto Farm and Ultra Instinct off.
+The universal hub now opens **Rift Personal Space 2.0**: a graphite interface with violet accents, a searchable game library, pinned favorites and a compact layout for portrait phones. **Search Rift** opens a native command palette; desktop users can also press **Ctrl+K**. Search for a section, a tool such as fly or ESP, or a game. Selecting a result takes you to its controls without automatically enabling a feature.
+
+The **Hub** tab includes **Murder Mystery 2**, **Superhero Arena** and **Survive The Hulk**, with small icons, Execute buttons and a badge on the game you are currently playing. Filter by **All**, **Favorites** or **This game**. Cards adapt between one and two columns. Home links to the library and the last successfully opened script. Favorites, launch history and reduced-motion preference are stored in `RiftHub/library.json` when executor file APIs are available; otherwise they work for the current session.
+
+Execute opens that game’s separate script and closes the universal hub. Join the selected game first; failed downloads leave the main hub open, and failed startup restores it. The last-opened entry updates only after the new window is validated. This update changes the universal interface, not the separate games’ gameplay controllers.
 
 All four scripts use the uploaded Rift Hub logo. The original JPEG is retained in each repository; compact headers and minimized controls use its R emblem. An executor without custom-image support keeps a text fallback. The intro stays disabled and its saved files remain unchanged.
 
@@ -23,10 +27,14 @@ All four scripts use the uploaded Rift Hub logo. The original JPEG is retained i
 - `games/superhero-arena.lua` forwards to the separate Superhero Arena repository. The v5.9 implementation, full editable HTML, tests and game icon are maintained there. See `docs/SuperheroArena.md`.
 - `games/survive-the-hulk.lua` forwards to the separate Hulk repository. Its Hub card has a small game icon, Execute button and “Opens Survive The Hulk and closes hub” caption.
 - `src/ui/Brand.lua` handles shared logo loading and caching for the universal window and minimized island.
+- `src/core/LibraryState.lua` validates UI-only preferences and implements library search, filters and ranking.
+- `src/ui/LibraryView.lua` draws the responsive library and keeps the existing guarded Execute handoff.
+- `src/ui/QuickSearch.lua` handles native touch/keyboard search, deep links, focus release and cleanup.
+- Settings includes **Reduce motion**, which remembers its state, and creator credit **N0VA_0100**.
 
 ## Validation
 
-Set `LUAU_BIN` and `LUAU_COMPILE_BIN` to the native Luau executables, then run `python tests/run_features.py`, `python tests/run_game_library.py`, `python tests/run_superhero.py` and `python tests/run_branding.py`.
+Set `LUAU_BIN` and `LUAU_COMPILE_BIN` to the native Luau executables, then run `python tests/run_features.py`, `python tests/run_game_library.py`, `python tests/run_superhero.py`, `python tests/run_branding.py` and `python tests/run_library_experience.py`.
 
 These checks verify compilation and simulated behavior. Playback, game controls and server behavior require live Roblox testing. Original third-party credits are preserved.
 

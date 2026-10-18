@@ -1,5 +1,5 @@
 -- Luau | Roblox | Xeno/Synapse-class executor | RiftHub main window
--- Halloween shell, live player portraits, and an optional docked cinema on Home.
+-- Responsive graphite shell, personal library and native quick search.
 -- Feature controls continue to use the existing modules and shared widget kit.
 
 local TweenService = game:GetService("TweenService")
@@ -78,23 +78,23 @@ local function buildHome(panel, ctx)
 	}, scroller)
 	Kit.create("UICorner", { CornerRadius = UDim.new(0, 14) }, hero)
 	Kit.Surface(hero)
-	Kit.Web(hero, 74, true)
+
 	Kit.create("UIStroke", { Color = Kit.BORDER, Transparency = 0.4, Thickness = 1 }, hero)
 	Kit.create("TextLabel", {
 		Position = UDim2.fromOffset(20, 22), Size = UDim2.new(0.46, -20, 0, 16), BackgroundTransparency = 1,
 		FontFace = Kit.face("BuilderSans", Enum.FontWeight.Medium), TextSize = 10, TextColor3 = Kit.CANDLE,
-		TextXAlignment = Enum.TextXAlignment.Left, Text = "●  UNIVERSAL / AFTER DARK",
+		TextXAlignment = Enum.TextXAlignment.Left, Text = "●  YOUR RIFT / YOUR SPACE",
 	}, hero)
 	Kit.create("TextLabel", {
 		Position = UDim2.fromOffset(20, 49), Size = UDim2.new(0.46, -20, 0, 48), BackgroundTransparency = 1,
 		FontFace = Kit.face("Merriweather", Enum.FontWeight.Regular, Enum.FontStyle.Italic),
-		TextSize = 32, TextColor3 = Kit.INK, TextXAlignment = Enum.TextXAlignment.Left, Text = "After dark.",
+		TextSize = 27, TextColor3 = Kit.INK, TextXAlignment = Enum.TextXAlignment.Left, Text = "Welcome in.",
 	}, hero)
 	Kit.create("TextLabel", {
 		Position = UDim2.fromOffset(20, 110), Size = UDim2.new(0.46, -24, 0, 66), BackgroundTransparency = 1,
 		FontFace = Kit.face("BuilderSans"), TextSize = 12, TextColor3 = Kit.SUB, TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
-		Text = "The night is yours. Your players, tools and session are ready.",
+		Text = "A quieter workspace for every game. Find your tools, pin your favorites, and make the session yours.",
 	}, hero)
 	local videoDock = Kit.create("Frame", {
 		Name = "HomeCinema", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12),
@@ -116,7 +116,14 @@ local function buildHome(panel, ctx)
 	end)
 
 	local library = Kit.Section(scroller, "Library", "▣", 5)
-	Kit.PlainRow(library, ctx.PlaceName, "Universal")
+	Kit.PlainRow(library, ctx.PlaceName, "Current game")
+	Kit.Button(library, "Your game collection", "Search, pin favorites and open a game script.", "Browse", function() ctx.SelectTab("hub") end)
+	if ctx.LibraryState and ctx.LibraryState.LastGame then
+		local id=ctx.LibraryState.LastGame
+		Kit.Button(library, "Last opened", id:gsub("%-", " "), "Find", function()
+			ctx.SelectTab("hub"); if ctx.LibraryFocus then ctx.LibraryFocus(id) end
+		end)
+	end
 
 	local statsRow = Kit.create("Frame", {
 		LayoutOrder = 3, Size = UDim2.new(1, 0, 0, 76), BackgroundTransparency = 1,
@@ -173,6 +180,7 @@ local function buildHome(panel, ctx)
 end
 
 local function buildHub(panel, ctx)
+	if ctx.LibraryView and ctx.LibraryState then return ctx.LibraryView(panel, ctx) end
 	local Kit = ctx.Kit
 	local scroller = Kit.Scroller(panel)
 	Kit.create("TextLabel", {
@@ -678,6 +686,10 @@ local function buildSettings(panel, ctx)
 	})
 
 	local motion = Kit.Section(scroller, "Motion & sound", "⚙", 2)
+	Kit.Toggle(motion, "Reduce motion", "Keep transitions still. This preference is remembered.", Kit.ReduceMotion, function(v)
+		Kit.ReduceMotion=v
+		if ctx.LibraryState then ctx.LibraryState.SetReducedMotion(v) end
+	end)
 	Kit.Slider(motion, "Animation speed", nil, 50, 200, 100, {
 		Suffix = "%", OnChanged = function(v) Kit.AnimSpeed = v / 100 end,
 	})
@@ -731,14 +743,15 @@ local function buildSettings(panel, ctx)
 			executorName = identifyexecutor()
 		end
 	end)
-	Kit.PlainRow(about, "Version", "1.0.0")
+	Kit.PlainRow(about, "Version", "2.0.0")
+	Kit.PlainRow(about, "Created by", "N0VA_0100")
 	Kit.PlainRow(about, "Executor", executorName)
 	Kit.PlainRow(about, "Place", ctx.PlaceName)
 	Kit.PlainRow(about, "Started", os.date("%H:%M:%S", os.time()))
 	Kit.Button(about, "Copy diagnostics", nil, "Copy", function()
 		pcall(function()
 			local diag = string.format(
-				"Rift hub 1.0.0 | executor: %s | place: %s (%d) | players: %d/%d",
+				"Rift hub 2.0.0 | executor: %s | place: %s (%d) | players: %d/%d",
 				executorName, ctx.PlaceName, game.PlaceId, #Players:GetPlayers(), Players.MaxPlayers)
 			if type(setclipboard) == "function" then setclipboard(diag) end
 		end)
@@ -850,7 +863,7 @@ local function Open(opts)
 	local zoom = Kit.create("UIScale", { Scale = 0.94 }, card)
 
 	local topBar = Kit.create("Frame", { Name = "TopBar", Size = UDim2.new(1, 0, 0, 56), BackgroundTransparency = 1, Parent = card })
-	Kit.Web(topBar, 52, false)
+
 	local seam = Kit.create("Frame", {
 		AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, 1),
 		BackgroundColor3 = Kit.ACCENT, BackgroundTransparency = 0.3, BorderSizePixel = 0,
@@ -908,9 +921,15 @@ local function Open(opts)
 		return btn
 	end
 	local closeBtn = roundButton("Close", "×", -24)
-	label("Season", "H A L L O W E E N", Kit.face("BuilderSans", Enum.FontWeight.Medium), 9, Kit.CANDLE,
+	local seasonLabel = label("Season", "P E R S O N A L  S P A C E", Kit.face("BuilderSans", Enum.FontWeight.Medium), 9, Kit.CANDLE,
 		{ Position = UDim2.fromOffset(204, 22) }, topBar)
 	local minimizeBtn = roundButton("Minimize", "_", -60)
+	local searchButton=Kit.create("TextButton",{
+		Name="SearchRift",AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-104,.5,0),Size=UDim2.fromOffset(154,30),
+		BackgroundColor3=Kit.TRACK,BackgroundTransparency=.25,BorderSizePixel=0,AutoButtonColor=false,
+		Text=UserInputService.TouchEnabled and "Search Rift…" or "Search Rift…  Ctrl K",FontFace=Kit.face("BuilderSans"),TextSize=11,TextColor3=Kit.SUB,
+	},topBar)
+	Kit.create("UICorner",{CornerRadius=UDim.new(0,8)},searchButton)
 
 	local sidebar = Kit.create("Frame", {
 		Name = "Sidebar", Position = UDim2.fromOffset(0, 56), Size = UDim2.new(0, 190, 1, -56),
@@ -930,7 +949,7 @@ local function Open(opts)
 	}, sidebar)
 	Kit.create("UICorner", { CornerRadius = UDim.new(0, 10) }, profile)
 	Kit.create("UIStroke", { Color = Kit.BORDER, Transparency = 0.35, Thickness = 1 }, profile)
-	addHeadshot(Kit, profile, LocalPlayer, UDim2.fromOffset(10, 11), 36)
+	local profileAvatar = addHeadshot(Kit, profile, LocalPlayer, UDim2.fromOffset(10, 11), 36)
 	Kit.create("TextLabel", {
 		Position = UDim2.fromOffset(54, 11), Size = UDim2.new(1, -64, 0, 18), BackgroundTransparency = 1,
 		FontFace = Kit.face("BuilderSans", Enum.FontWeight.Medium), TextSize = 12, TextColor3 = Kit.INK,
@@ -1069,15 +1088,33 @@ local function Open(opts)
 		IsVisible = function() return visible end,
 		IsHomeVisible = function() return activeTab == "home" end,
 		HomeVideo = opts.HomeVideo, GameLibrary = opts.GameLibrary, InterfaceScale = 1,
+		LibraryState = opts.LibraryState, LibraryView = opts.LibraryView,
 		SelectTab = selectTab,
 	}
 
 	local fit = 1
+	local quickSearch
 	function ctx.FitWindow()
 		local camera = workspace.CurrentCamera
 		if not camera then return end
 		local viewport = camera.ViewportSize
-		fit = math.min(ctx.InterfaceScale, math.max(0.1, (viewport.X - 32) / 900), math.max(0.1, (viewport.Y - 32) / 580))
+		local compact=viewport.X < 700 and viewport.X < viewport.Y
+		local width,rail=compact and 540 or 900,compact and 64 or 190
+		card.Size=UDim2.fromOffset(width,580)
+		sidebar.Size=UDim2.new(0,rail,1,-56)
+		content.Position=UDim2.fromOffset(rail,56); content.Size=UDim2.new(1,-rail,1,-56)
+		seasonLabel.Visible=not compact
+		searchButton.Size=UDim2.fromOffset(compact and 116 or 154,30)
+		profile.ClipsDescendants=true
+		profileAvatar.Position=UDim2.fromOffset(compact and 2 or 10,11)
+		for _,entry in pairs(tabs) do
+			entry.label.Visible=not compact
+			entry.glyph.Position=UDim2.new(0,10,.5,0)
+		end
+		for _,child in ipairs(tabList:GetChildren()) do
+			if child:IsA("TextLabel") then child.Visible=not compact end
+		end
+		fit = math.min(ctx.InterfaceScale, math.max(0.1, (viewport.X - 24) / width), math.max(0.1, (viewport.Y - 32) / 580))
 		zoom.Scale = fit * (visible and 1 or 0.94)
 	end
 	local lastViewport
@@ -1140,6 +1177,10 @@ local function Open(opts)
 	for _, navItem in ipairs(NAV) do
 		navItem.build(panels[navItem.id], ctx)
 	end
+	if opts.QuickSearch then
+		quickSearch=opts.QuickSearch(ctx)
+		janitor.add(searchButton.Activated:Connect(quickSearch.Open))
+	else searchButton.Visible=false end
 
 	local function animateTo(isOpen, time)
 		Kit.tween(card, { BackgroundTransparency = isOpen and ctx.GlassAlpha or 1 }, time)
@@ -1154,6 +1195,7 @@ local function Open(opts)
 		if unloaded then return end
 		if visible == isOpen then return end
 		visible = isOpen
+		if not isOpen and quickSearch then quickSearch.Close() end
 		if isOpen then card.Visible = true end
 		if not isOpen then
 			task.delay(CLOSE_TIME, function() if not visible then card.Visible = false end end)

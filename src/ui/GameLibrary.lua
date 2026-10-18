@@ -91,6 +91,7 @@ return function(ctx)
 			end
 			return false, M.Status
 		end
+		if ctx.LibraryState then pcall(ctx.LibraryState.RecordLaunch, item.Id) end
 		M.Status = item.ShortName .. " open"
 		return true, result
 	end
