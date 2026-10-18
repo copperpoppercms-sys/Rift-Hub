@@ -1,6 +1,6 @@
 # Rift Hub
 
-Prepared from the saved universal hub, intro, home-video and game launcher sources, plus the latest Superhero Arena standalone script. Published as `copperpoppercms-sys/Rift-Hub`, with MM2 maintained in `copperpoppercms-sys/Rift-Hub-MM2`, Superhero Arena v5.4 in `copperpoppercms-sys/Rift-Hub-Superhero-Arena`, and Survive The Hulk in `copperpoppercms-sys/Rift-Hub-Survive-The-Hulk`.
+Prepared from the saved universal hub, intro, home-video and game launcher sources, plus the latest Superhero Arena standalone script. Published as `copperpoppercms-sys/Rift-Hub`, with MM2 maintained in `copperpoppercms-sys/Rift-Hub-MM2`, Superhero Arena v5.5 in `copperpoppercms-sys/Rift-Hub-Superhero-Arena`, and Survive The Hulk in `copperpoppercms-sys/Rift-Hub-Survive-The-Hulk`.
 
 Run the universal hub:
 
@@ -20,7 +20,7 @@ All four scripts use the uploaded Rift Hub logo. The original JPEG is retained i
 - `assets/` includes the saved video frame packs, audio, welcome background and source media.
 - `src/ui/GameLibrary.lua` loads MM2, Superhero Arena and Survive The Hulk from their separate repositories. It verifies each game’s place/universe and returned window before completing the handoff.
 - `games/mm2.lua` is a forwarding loader; the full MM2 implementation belongs only in the separate MM2 repo.
-- `games/superhero-arena.lua` forwards to the separate Superhero Arena repository. The v5.4 implementation, full editable HTML, tests and game icon are maintained there. See `docs/SuperheroArena.md`.
+- `games/superhero-arena.lua` forwards to the separate Superhero Arena repository. The v5.5 implementation, full editable HTML, tests and game icon are maintained there. See `docs/SuperheroArena.md`.
 - `games/survive-the-hulk.lua` forwards to the separate Hulk repository. Its Hub card has a small game icon, Execute button and “Opens Survive The Hulk and closes hub” caption.
 - `src/ui/Brand.lua` handles shared logo loading and caching for the universal window and minimized island.
 
