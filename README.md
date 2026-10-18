@@ -14,7 +14,7 @@ The **Hub** tab includes **Murder Mystery 2**, **Superhero Arena** and **Survive
 
 Execute opens that game’s separate script and closes the universal hub. Join the selected game first; failed downloads leave the main hub open, and failed startup restores it. The last-opened entry updates only after the new window is validated. This update changes the universal interface, not the separate games’ gameplay controllers.
 
-The **Hero / Villain** section starts with a compact **Hulk** card, a small thumbnail, the description **huge rage**, and an **Exterminate** button. This is a UI preview: the button shows a coming-soon message and does not launch a script or enable powers. Search Rift can also open the section.
+The **Hero / Villain** section starts with a compact **Hulk** card, a standalone Hulk comic portrait, the description **huge rage**, and an **Exterminate** button. This is a UI preview: the button shows a coming-soon message and does not launch a script or enable powers. Search Rift can also open the section.
 
 All four scripts use the uploaded Rift Hub logo. The original JPEG is retained in each repository; compact headers and minimized controls use its R emblem. An executor without custom-image support keeps a text fallback. The intro stays disabled and its saved files remain unchanged.
 
@@ -43,3 +43,5 @@ These checks verify compilation and simulated behavior. Playback, game controls 
 ## Execute snippet
 
 `execute.lua` contains the copy/paste execution snippet for this repository.
+
+Hulk character portrait: [Marvel](https://cdn.marvel.com/content/1x/006hbb_com_crd_01.jpg). Original image bytes and source information are retained in `assets/hulk_portrait.jpg` and `assets/hulk_portrait_source.json`.

@@ -279,10 +279,35 @@ local function buildHeroVillain(panel, ctx)
 	Kit.Surface(tile)
 	local image = Kit.create("ImageLabel", {
 		Position = UDim2.fromOffset(14, 14), Size = UDim2.fromOffset(40, 40),
-		BackgroundColor3 = Kit.VOID, BorderSizePixel = 0, ScaleType = Enum.ScaleType.Fit,
-		Image = "rbxthumb://type=GameIcon&id=10742937135&w=150&h=150",
+		BackgroundColor3 = Kit.VOID, BorderSizePixel = 0, ScaleType = Enum.ScaleType.Crop,
+		Name = "HulkPortrait", Image = "",
 	}, tile)
 	Kit.create("UICorner", { CornerRadius = UDim.new(0, 9) }, image)
+	local imageFallback = Kit.create("TextLabel", {
+		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "H",
+		FontFace = Kit.face("BuilderSans", Enum.FontWeight.Bold), TextSize = 20, TextColor3 = green,
+	}, image)
+	task.spawn(function()
+		local ok, asset = pcall(function()
+			local register = type(getcustomasset) == "function" and getcustomasset or type(getsynasset) == "function" and getsynasset
+			assert(register and type(writefile) == "function" and type(isfile) == "function", "Custom images unavailable")
+			local path = "RiftHub/hulk-portrait-a6c682101a76.jpg"
+			if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder("RiftHub") then makefolder("RiftHub") end
+			if not isfile(path) then
+				local bytes = game:HttpGet("https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub/main/assets/hulk_portrait.jpg")
+				assert(type(bytes) == "string" and bytes:sub(1, 3) == string.char(255, 216, 255), "Invalid Hulk portrait")
+				writefile(path, bytes)
+			end
+			local content = register(path)
+			assert(type(content) == "string" and content ~= "", "Portrait registration failed")
+			return content
+		end)
+		if ok and image.Parent then
+			image.Image = asset
+			imageFallback.Visible = false
+		end
+	end)
+
 	Kit.create("TextLabel", {
 		Position = UDim2.fromOffset(66, 13), Size = UDim2.new(1, -80, 0, 22), BackgroundTransparency = 1,
 		FontFace = Kit.face("BuilderSans", Enum.FontWeight.Medium), TextSize = 14, TextColor3 = Kit.INK,
