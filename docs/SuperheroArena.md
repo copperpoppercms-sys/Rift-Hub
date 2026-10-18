@@ -1,6 +1,6 @@
 # Rift Hub · Superhero Arena
 
-The current v5.7 script is maintained in [Rift-Hub-Superhero-Arena](https://github.com/copperpoppercms-sys/Rift-Hub-Superhero-Arena). The main hub’s game catalogue fetches that repository’s `main.lua`; `games/superhero-arena.lua` is a compatibility loader.
+The current v5.8 script is maintained in [Rift-Hub-Superhero-Arena](https://github.com/copperpoppercms-sys/Rift-Hub-Superhero-Arena). The main hub’s game catalogue fetches that repository’s `main.lua`; `games/superhero-arena.lua` is a compatibility loader.
 
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-Superhero-Arena/main/main.lua"))()
@@ -12,4 +12,4 @@ The Hub card uses Roblox’s published game icon and the same compact card style
 
 Download [the editable HTML](https://github.com/copperpoppercms-sys/Rift-Hub-Superhero-Arena/blob/main/docs/SuperheroArena_Editor.html) and open it in a browser to copy or edit the complete code. Standalone behavior checks live in that repository’s `tests/`. This repository checks the catalogue handoff and forwarding loader.
 
-v5.7 adds Fast sidestep, on by default at speed 64 (adjustable 24–96). The temporary local speed request restores the previous value when it ends and preserves speed changes made by the game. Burst duration and travel remain capped. The server may reject/correct the speed request; live attack avoidance remains unverified. Mobile controls retain touch dispatch and changed manual input takes control immediately.
+v5.8 continues sidestepping at game-controlled speed after a burst override, reports actual input/ability locks, removes an Auto Farm planner delay from otherwise legal defensive dash requests, and yields new attacks to a fresh threat. Test game dash isolates native input without a speed burst; automatic dash diagnostics stay separate from manual tests. Locked abilities and game-replaced speed remain actual limitations, not established bypasses.
