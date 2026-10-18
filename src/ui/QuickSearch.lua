@@ -5,7 +5,7 @@ return function(ctx)
 	local commands={
 		{Title="Home",Hint="Session overview and cinema",Words="dashboard welcome fps ping",Tab="home"},
 		{Title="Game library",Hint="Your games and favorites",Words="hub execute launch scripts favorite",Tab="hub"},
-		{Title="Hero / Villain",Hint="Hulk · huge rage · coming soon",Words="hero villain villan hulk rage exterminate",Tab="heroes"},
+		{Title="Hero / Villain",Hint="Hulk · huge rage · charged leap",Words="hero villain villan hulk rage exterminate charge leap",Tab="heroes"},
 		{Title="Combat",Hint="Universal targeting controls",Words="aim assist trigger",Tab="combat"},
 		{Title="Visuals",Hint="Player overlays and visibility",Words="esp chams name fullbright highlight",Tab="visuals"},
 		{Title="Movement",Hint="Movement and camera tools",Words="fly speed jump noclip freecam waypoint",Tab="movement"},

@@ -253,7 +253,7 @@ local function buildHub(panel, ctx)
 	end
 end
 
--- Character cards are a UI preview only; powers will be implemented separately.
+-- Character cards enable their own controls without loading a separate game script.
 local function buildHeroVillain(panel, ctx)
 	local Kit = ctx.Kit
 	local scroller = Kit.Scroller(panel)
@@ -328,12 +328,28 @@ local function buildHeroVillain(panel, ctx)
 	local status = Kit.create("TextLabel", {
 		Name = "HulkPreviewStatus", Position = UDim2.fromOffset(14, 115), Size = UDim2.new(1, -28, 0, 28),
 		BackgroundTransparency = 1, FontFace = Kit.face("BuilderSans"), TextSize = 10, TextColor3 = Kit.FAINT,
-		TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = "Coming soon",
+		TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = "Hold-to-charge leap",
 	}, tile)
-	-- Deliberately no loader or gameplay action: this button only acknowledges the preview.
+	local leap = ctx.Features.HulkLeap
+	if leap then
+		leap.CanUse = function()
+			if ctx.Features.Fly and ctx.Features.Fly.Config.Enabled then return false, "Turn off flight before leaping" end
+			return true
+		end
+		leap.OnEnabledChanged = function(on)
+			if status.Parent then status.Text = on and "Hold LEAP to charge · release to launch" or "Hold-to-charge leap" end
+		end
+		ctx.Janitor.add(function() leap.OnEnabledChanged = nil end)
+	end
 	ctx.Janitor.add(button.Activated:Connect(function()
 		Kit.Click()
-		status.Text = "Hulk powers coming soon."
+		if not leap then status.Text = "Leap controls couldn’t load. Reopen Rift to retry."; return end
+		local allowed, reason = leap.CanUse()
+		if not allowed then status.Text = reason; return end
+		local ok, err = leap.SetEnabled(true)
+		if not ok then status.Text = "Leap controls couldn’t open."; warn("[RiftHub] Hulk leap: " .. tostring(err)); return end
+		status.Text = "Hold LEAP to charge · release to launch"
+		ctx.Minimize()
 	end))
 	ctx.Janitor.add(tile.MouseEnter:Connect(function() Kit.tween(rim, { Color = green, Transparency = 0.05 }, 0.14) end))
 	ctx.Janitor.add(tile.MouseLeave:Connect(function() Kit.tween(rim, { Color = Kit.BORDER, Transparency = 0.25 }, 0.14) end))
@@ -837,7 +853,7 @@ local function buildSettings(panel, ctx)
 			executorName = identifyexecutor()
 		end
 	end)
-	Kit.PlainRow(about, "Version", "2.1.0")
+	Kit.PlainRow(about, "Version", "2.2.0")
 	Kit.PlainRow(about, "Created by", "N0VA_0100")
 	Kit.PlainRow(about, "Executor", executorName)
 	Kit.PlainRow(about, "Place", ctx.PlaceName)
@@ -845,7 +861,7 @@ local function buildSettings(panel, ctx)
 	Kit.Button(about, "Copy diagnostics", nil, "Copy", function()
 		pcall(function()
 			local diag = string.format(
-				"Rift hub 2.1.0 | executor: %s | place: %s (%d) | players: %d/%d",
+				"Rift hub 2.2.0 | executor: %s | place: %s (%d) | players: %d/%d",
 				executorName, ctx.PlaceName, game.PlaceId, #Players:GetPlayers(), Players.MaxPlayers)
 			if type(setclipboard) == "function" then setclipboard(diag) end
 		end)
@@ -1186,6 +1202,8 @@ local function Open(opts)
 		LibraryState = opts.LibraryState, LibraryView = opts.LibraryView,
 		SelectTab = selectTab,
 	}
+
+	function ctx.Minimize() if setVisible then setVisible(false) end end
 
 	local fit = 1
 	local quickSearch
