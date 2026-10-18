@@ -1,17 +1,23 @@
--- Exact user-supplied Rift logo. ImageRect selects the R emblem for compact controls.
+-- Exact user-supplied Rift logo. Normalized clipping stays centered after texture resizing.
 -- One asynchronous download per script; failed image loading leaves the text fallback usable.
 return function(url)
 	local M={}
 	local asset,started=nil,false
 	local targets=setmetatable({},{__mode="k"})
 	local function paint(image,fallback)
-		if not image.Parent or not asset then return end
+		if not image.Parent or not image.Parent.Parent or not asset then return end
 		image.Image=asset; image.Visible=true
 		if fallback and fallback.Parent then fallback.Text="" end
 	end
 	function M.Apply(image,fallback)
-		image.Name="RiftLogo"; image.ImageRectOffset=Vector2.new(380,295); image.ImageRectSize=Vector2.new(510,525)
-		image.ImageColor3=Color3.new(1,1,1); image.ScaleType=Enum.ScaleType.Fit; image.Visible=false
+		local viewport=Instance.new("Frame")
+		viewport.Name="RiftLogoViewport"; viewport.BackgroundTransparency=1; viewport.BorderSizePixel=0; viewport.ClipsDescendants=true
+		viewport.Position=image.Position; viewport.Size=image.Size; viewport.AnchorPoint=image.AnchorPoint
+		viewport.LayoutOrder=image.LayoutOrder; viewport.ZIndex=image.ZIndex; viewport.Parent=image.Parent
+		image.Parent=viewport; image.AnchorPoint=Vector2.new()
+		image.Position=UDim2.fromScale(-374/520,-298/520); image.Size=UDim2.fromScale(1254/520,1254/520)
+		image.Name="RiftLogo"; image.ImageRectOffset=Vector2.new(); image.ImageRectSize=Vector2.new()
+		image.ImageColor3=Color3.new(1,1,1); image.ScaleType=Enum.ScaleType.Stretch; image.Visible=false
 		targets[image]=fallback or false
 		if asset then paint(image,fallback); return end
 		if started then return end; started=true
