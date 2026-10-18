@@ -1,6 +1,6 @@
 # Rift Hub · Superhero Arena
 
-The current v5.2 script is maintained in [Rift-Hub-Superhero-Arena](https://github.com/copperpoppercms-sys/Rift-Hub-Superhero-Arena). The main hub’s game catalogue fetches that repository’s `main.lua`; `games/superhero-arena.lua` is a compatibility loader.
+The current v5.3 script is maintained in [Rift-Hub-Superhero-Arena](https://github.com/copperpoppercms-sys/Rift-Hub-Superhero-Arena). The main hub’s game catalogue fetches that repository’s `main.lua`; `games/superhero-arena.lua` is a compatibility loader.
 
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-Superhero-Arena/main/main.lua"))()
@@ -12,4 +12,4 @@ The Hub card uses Roblox’s published game icon and the same compact card style
 
 Download [the editable HTML](https://github.com/copperpoppercms-sys/Rift-Hub-Superhero-Arena/blob/main/docs/SuperheroArena_Editor.html) and open it in a browser to copy or edit the complete code. Standalone behavior checks live in that repository’s `tests/`. This repository checks the catalogue handoff and forwarding loader.
 
-v5.2 fixes independent attack-field detection and short transitions. Combat now includes a bounded Test dodge, a 10-second observational encounter recorder and Copy dodge report with clearance reasons and movement observations. Automatic dodging still needs live verification after reported failures.
+v5.3 adds the live report's cast-lock and skill-state cues, removes the hidden 10-stud melee range cutoff, and separates automatic dodges from manual tests. Combat includes a bounded Test dodge, encounter recorder and Copy dodge report. Visual effects do not establish the server's damage hitboxes; live avoidance remains unverified.
