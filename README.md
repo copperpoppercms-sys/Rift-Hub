@@ -12,7 +12,7 @@ The **Hub** tab shows compact **Murder Mystery 2** and **Superhero Arena** cards
 
 ## Contents
 
-- `main.lua` loads the universal hub and the intro.
+- `main.lua` opens the universal hub immediately. The intro video and Welcome to Rift are temporarily disabled with `INTRO_ENABLED = false`; all media and code are retained. See `docs/IntroRestore.md` to restore them.
 - `src/ui/Intro.lua` retains footage playback, a bottom-right skip button that skips only the footage, and the welcome screen tied to welcome audio. The native title now reads Welcome to Rift.
 - `src/ui/HomeVideo.lua` retains the looping in-hub video and expanded player with a close control.
 - `assets/` includes the saved video frame packs, audio, welcome background and source media.

@@ -12,6 +12,8 @@ local REPO_OWNER = "copperpoppercms-sys"
 local REPO_NAME = "Rift-Hub"
 local REPO_BRANCH = "main"
 local RAW_BASE = string.format("https://raw.githubusercontent.com/%s/%s/%s/", REPO_OWNER, REPO_NAME, REPO_BRANCH)
+-- Temporarily disabled. Intro.lua and every media asset are preserved; see docs/IntroRestore.md.
+local INTRO_ENABLED = false
 
 -- fetches a raw file from the repo, cache-busted, with one retry on transient HttpGet failure
 local function fetchRaw(path)
@@ -53,7 +55,6 @@ end
 local Rift = {}
 Rift.Utils = loadModule("src/core/Utils.lua")
 Rift.Config = loadModule("src/core/Config.lua")
-local PlayIntro = loadModule("src/ui/Intro.lua")
 
 if not Rift.Utils or not Rift.Config then
 	warn("[RiftHub] core modules failed to load, aborting")
@@ -123,11 +124,9 @@ local function onReady()
 	end
 end
 
-if PlayIntro then
-	-- Intro.lua fetches assets/frames.pack + assets/audio.ogg from this same
-	-- repo itself and falls back to a text-only intro if the executor can't
-	-- do the local caching that needs (no writefile/getcustomasset/etc).
-	PlayIntro({ OnComplete = onReady })
+if INTRO_ENABLED then
+	local PlayIntro = loadModule("src/ui/Intro.lua")
+	if PlayIntro then PlayIntro({ OnComplete = onReady }) else onReady() end
 else
 	onReady()
 end
