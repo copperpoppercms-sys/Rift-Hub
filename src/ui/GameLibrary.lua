@@ -17,8 +17,18 @@ local SUPERHERO = {
 	Handoff = "Opens Superhero Arena and closes hub",
 }
 
+local HULK_RAW = "https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-Survive-The-Hulk/main/"
+local HULK = {
+	Id = "survive-the-hulk", Name = "Survive The Hulk", ScriptName = "Rift Hub · Survive The Hulk",
+	ShortName = "Survive The Hulk", ChunkName = "RiftHubSurviveTheHulk/main.lua",
+	PlaceId = 109166720609444, UniverseId = 10742937135, Url = HULK_RAW .. "main.lua",
+	IconUrl = HULK_RAW .. "assets/hulk_icon.png",
+	Thumbnail = "rbxthumb://type=GameIcon&id=10742937135&w=150&h=150",
+	Handoff = "Opens Survive The Hulk and closes hub",
+}
+
 return function(ctx)
-	local M = { Games = { MM2, SUPERHERO }, Status = "Ready" }
+	local M = { Games = { MM2, SUPERHERO, HULK }, Status = "Ready" }
 	local busy, disposed = false, false
 	local function cleanupGame(item)
 		local env = type(getgenv) == "function" and getgenv() or _G
@@ -26,13 +36,15 @@ return function(ctx)
 			if type(env.MONO_Unload) == "function" then pcall(env.MONO_Unload) end
 			if type(env.RiftMM2StartupCleanup) == "function" then pcall(env.RiftMM2StartupCleanup) end
 		else
-			if type(env.SuperheroArenaHub) == "table" and type(env.SuperheroArenaHub.Unload) == "function" then pcall(env.SuperheroArenaHub.Unload) end
+			local key = item.Id == "survive-the-hulk" and "RiftHulkHub" or "SuperheroArenaHub"
+			local name = item.Id == "survive-the-hulk" and "RiftSurviveTheHulk" or "RiftAutoPlay"
+			if type(env[key]) == "table" and type(env[key].Unload) == "function" then pcall(env[key].Unload) end
 			-- Also remove a window created before a startup error prevented API publication.
 			pcall(function()
 				local parents = { game:GetService("CoreGui"), game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui") }
 				if type(gethui) == "function" then table.insert(parents, gethui()) end
 				for _, parent in ipairs(parents) do
-					local window = parent:FindFirstChild("RiftAutoPlay")
+					local window = parent:FindFirstChild(name)
 					if window then window:Destroy() end
 				end
 			end)

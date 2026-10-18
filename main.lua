@@ -65,6 +65,8 @@ end
 local function onReady()
 	if type(getgenv) == "function" then getgenv().__RiftHubLoaded = true end
 	local Kit = loadModule("src/ui/Kit.lua")
+	local BrandCtor = loadModule("src/ui/Brand.lua")
+	local Brand = BrandCtor and BrandCtor(RAW_BASE .. "assets/rift_logo.jpg")
 	local OpenHub = loadModule("src/ui/Hub.lua")
 	local MakeIsland = loadModule("src/ui/Island.lua")
 	local HomeVideo = loadModule("src/ui/HomeVideo.lua")
@@ -109,6 +111,7 @@ local function onReady()
 
 	Rift.Hub = OpenHub({
 		Kit = Kit,
+		Brand = Brand,
 		Utils = Rift.Utils,
 		Config = Rift.Config,
 		Features = Rift.Features,

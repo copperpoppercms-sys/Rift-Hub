@@ -21,7 +21,7 @@ assert 'CellSize = UDim2.fromOffset(320, 144)' in hub and 'FillDirectionMaxCells
 assert 'Text = item.Handoff' in hub
 with tempfile.TemporaryDirectory() as directory:
     directory = Path(directory)
-    for file in [root/'games/mm2.lua', root/'src/ui/Hub.lua', root/'src/ui/Kit.lua', root/'src/ui/GameLibrary.lua', root/'main.lua']:
+    for file in [root/'games/mm2.lua', root/'games/survive-the-hulk.lua', root/'src/ui/Hub.lua', root/'src/ui/Kit.lua', root/'src/ui/GameLibrary.lua', root/'main.lua']:
         result = subprocess.run([compiler, '--null', str(file)], text=True, capture_output=True)
         if result.returncode:
             raise SystemExit(result.stdout + result.stderr)

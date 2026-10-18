@@ -1,5 +1,5 @@
 -- Luau | Roblox | Xeno/Synapse-class executor | the minimized FPS/ping pill shown while the hub is hidden
-return function(Kit, onReopen)
+return function(Kit, onReopen, Brand)
 	local RunService = game:GetService("RunService")
 	local UserInputService = game:GetService("UserInputService")
 	local Stats = game:GetService("Stats")
@@ -46,7 +46,13 @@ return function(Kit, onReopen)
 		}, row)
 	end
 
-	stat("☾  RIFT", Kit.CANDLE, 1)
+	if Brand then
+		local mark = Kit.create("Frame", {LayoutOrder=1,Size=UDim2.fromOffset(24,24),BackgroundTransparency=1}, row)
+		local fallback = Kit.create("TextLabel", {Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Text="R",TextSize=19,
+			Font=Enum.Font.GothamBold,TextColor3=Kit.INK}, mark)
+		local image = Kit.create("ImageLabel", {Size=UDim2.fromScale(1,1),BackgroundTransparency=1}, mark)
+		Brand.Apply(image, fallback)
+	else stat("RIFT", Kit.CANDLE, 1) end
 	local fpsLbl = stat("60 fps", Kit.SUB, 2)
 	local msLbl = stat("16 ms", Kit.SUB, 3)
 	local chevron = Kit.create("TextButton", {

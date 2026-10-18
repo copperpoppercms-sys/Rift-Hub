@@ -65,7 +65,7 @@ print("PASS: MM2 handoff, network/compile failures, runtime rollback, duplicate 
 
 -- Superhero Arena uses a distinct repository, game guard, icon and cleanup.
 m,state=controller(); local hero=m.Games[2]
-assert(#m.Games==2 and hero.Id=="superhero-arena")
+assert(#m.Games==3 and hero.Id=="superhero-arena")
 assert(hero.PlaceId==78710221869926 and hero.UniverseId==10765491459)
 assert(hero.Url=="https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-Superhero-Arena/main/main.lua")
 assert(hero.IconUrl:find("Rift-Hub-Superhero-Arena/main/assets/superhero_arena_icon.png",1,true))
@@ -94,6 +94,43 @@ fetchHook=function() duplicateResult=m.Execute(m.Games[2]) end
 assert(m.Execute(m.Games[2]) and duplicateResult==false); fetchHook=nil
 m,state=controller(); assert(not m.Execute({Url=hero.Url})); closed,restarted,open=state(); assert(closed==0 and open)
 print("PASS: Superhero Arena repository, game IDs, handoff, rollback, cancellation and duplicate protection.")
+
+-- Hulk launcher follows the same handoff and isolates cleanup from the other scripts.
+m,state=controller(); local hulk=m.Games[3]
+assert(hulk.Id=="survive-the-hulk" and hulk.PlaceId==109166720609444 and hulk.UniverseId==10742937135)
+assert(hulk.Url=="https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-Survive-The-Hulk/main/main.lua")
+assert(hulk.IconUrl=="https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-Survive-The-Hulk/main/assets/hulk_icon.png")
+assert(hulk.Handoff=="Opens Survive The Hulk and closes hub")
+assert(not m.Execute(hulk)); closed,restarted,open=state(); assert(closed==0 and open)
+game.PlaceId,game.GameId=hulk.PlaceId,hulk.UniverseId
+source="return {Game='Survive The Hulk',Gui={Parent=true}}"
+m,state=controller(); assert(m.Execute(m.Games[3]))
+closed,restarted,open=state(); assert(closed==1 and not open and restarted==0)
+assert(lastUrl:find("Rift-Hub-Survive-The-Hulk/main/main.lua?cb=",1,true))
+game.PlaceId=1; m,state=controller(); assert(m.Execute(m.Games[3]))
+fetchError=true; m,state=controller(); assert(not m.Execute(m.Games[3]))
+closed,restarted,open=state(); assert(closed==0 and open); fetchError=false
+source="invalid @@ code"; m,state=controller(); assert(not m.Execute(m.Games[3]))
+closed,restarted,open=state(); assert(closed==0 and open)
+local hulkCleanup,partialCleanup=0,0
+env.RiftHulkHub={Unload=function() hulkCleanup+=1 end}
+local orphan={Destroy=function() partialCleanup+=1 end}
+function game:GetService(name)
+	if name=="CoreGui" then return {FindFirstChild=function(_,key) if key=="RiftSurviveTheHulk" then return orphan end end} end
+	if name=="Players" then return {LocalPlayer={FindFirstChild=function() return nil end}} end
+	error(name)
+end
+source="error('Hulk startup failed')"; m,state=controller(); assert(not m.Execute(m.Games[3]))
+closed,restarted,open=state(); assert(closed==1 and restarted==1 and open and hulkCleanup==1 and partialCleanup==1)
+assert(heroCleanup==1,"Hulk failure incorrectly unloaded Superhero Arena")
+source="return {Game='Murder Mystery 2',Gui={Parent=true}}"; m,state=controller(); assert(not m.Execute(m.Games[3]))
+closed,restarted,open=state(); assert(closed==1 and restarted==1 and open and hulkCleanup==2)
+source="return {Game='Survive The Hulk',Gui={Parent=true}}"
+m,state=controller(); fetchHook=function() m.Dispose() end
+assert(not m.Execute(m.Games[3])); closed,restarted,open=state(); assert(closed==0 and open); fetchHook=nil
+m,state=controller(); fetchHook=function() duplicateResult=m.Execute(m.Games[3]) end
+assert(m.Execute(m.Games[3]) and duplicateResult==false); fetchHook=nil
+print("PASS: Hulk card metadata, handoff, subplaces, fetch/compile/startup failure, isolated cleanup, cancellation and duplicate protection.")
 
 -- Slider/keybind handlers must disappear when the main window is destroyed.
 local function signal()

@@ -886,6 +886,11 @@ local function Open(opts)
 		return item
 	end
 
+	if opts.Brand then
+		local logo = Kit.create("ImageLabel", { LayoutOrder = 0, Size = UDim2.fromOffset(28, 28), BackgroundTransparency = 1 }, brand)
+		opts.Brand.Apply(logo)
+		fade(logo, "ImageTransparency", 0)
+	end
 	label("Word", "RIFT", Kit.face("Merriweather", Enum.FontWeight.Bold), 23, Kit.INK, { LayoutOrder = 1 }, brand)
 	local subWord = label("Sub", "hub", Kit.face("Merriweather", Enum.FontWeight.Regular, Enum.FontStyle.Italic), 18, Kit.CANDLE, { LayoutOrder = 2 }, brand)
 
@@ -1054,7 +1059,7 @@ local function Open(opts)
 
 	local island = opts.Island and opts.Island(Kit, function()
 		if setVisible then setVisible(true) end
-	end)
+	end, opts.Brand)
 
 	local ctx = {
 		Kit = Kit, Utils = Utils, Config = Config, Features = Features, Janitor = janitor,
