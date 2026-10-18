@@ -27,8 +27,14 @@ local HULK = {
 	Handoff = "Opens Survive The Hulk and closes hub",
 }
 
+local HULK_CHARACTER = {
+	Id = "hulk-character", Name = "Hulk", ShortName = "Hulk", Universal = true,
+	ChunkName = "RiftHubHulk/main.lua",
+	Url = "https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-Hulk/main/main.lua",
+}
+
 return function(ctx)
-	local M = { Games = { MM2, SUPERHERO, HULK }, Status = "Ready" }
+	local M = { Games = { MM2, SUPERHERO, HULK }, Characters = { HULK_CHARACTER }, Status = "Ready" }
 	local busy, disposed = false, false
 	local function cleanupGame(item)
 		local env = type(getgenv) == "function" and getgenv() or _G
@@ -36,8 +42,8 @@ return function(ctx)
 			if type(env.MONO_Unload) == "function" then pcall(env.MONO_Unload) end
 			if type(env.RiftMM2StartupCleanup) == "function" then pcall(env.RiftMM2StartupCleanup) end
 		else
-			local key = item.Id == "survive-the-hulk" and "RiftHulkHub" or "SuperheroArenaHub"
-			local name = item.Id == "survive-the-hulk" and "RiftSurviveTheHulk" or "RiftAutoPlay"
+			local key = item.Id == "hulk-character" and "RiftHulkCharacter" or item.Id == "survive-the-hulk" and "RiftHulkHub" or "SuperheroArenaHub"
+			local name = item.Id == "hulk-character" and "RiftHulkLeap" or item.Id == "survive-the-hulk" and "RiftSurviveTheHulk" or "RiftAutoPlay"
 			if type(env[key]) == "table" and type(env[key].Unload) == "function" then pcall(env[key].Unload) end
 			-- Also remove a window created before a startup error prevented API publication.
 			pcall(function()
@@ -55,9 +61,11 @@ return function(ctx)
 		if disposed then return false, "Hub is closed" end
 		if busy then return false, "Already loading" end
 		local known = false
-		for _, entry in ipairs(M.Games) do if entry == item then known = true; break end end
+		for _, list in ipairs({ M.Games, M.Characters }) do
+			for _, entry in ipairs(list) do if entry == item then known = true; break end end
+		end
 		if not known then return false, "Unknown game" end
-		if game.PlaceId ~= item.PlaceId and game.GameId ~= item.UniverseId then
+		if not item.Universal and game.PlaceId ~= item.PlaceId and game.GameId ~= item.UniverseId then
 			M.Status = "Open " .. item.Name .. " first"; return false, M.Status
 		end
 		busy = true; M.Status = "Fetching script…"
@@ -91,7 +99,7 @@ return function(ctx)
 			end
 			return false, M.Status
 		end
-		if ctx.LibraryState then pcall(ctx.LibraryState.RecordLaunch, item.Id) end
+		if ctx.LibraryState and not item.Universal then pcall(ctx.LibraryState.RecordLaunch, item.Id) end
 		M.Status = item.ShortName .. " open"
 		return true, result
 	end

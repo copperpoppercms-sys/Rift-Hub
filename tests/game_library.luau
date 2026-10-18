@@ -144,6 +144,31 @@ fetchHook=function() m.Dispose() end
 assert(not m.Execute(m.Games[1]));_,_,_,history=state();assert(#history==0);fetchHook=nil
 print("PASS: launch history is written only after the game window is validated.")
 
+-- Hulk character is universal, separate from the Survive The Hulk game entry.
+m,state=controller();local character=m.Characters[1]
+assert(character.Id=="hulk-character" and character.Name=="Hulk" and character.Universal==true)
+assert(#m.Games==3 and character.Url=="https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-Hulk/main/main.lua")
+game.PlaceId,game.GameId=999,999
+source="return {Game='Hulk',Gui={Parent=true}}"
+m,state=controller();assert(m.Execute(m.Characters[1]))
+closed,restarted,open=state();assert(closed==1 and not open and restarted==0)
+local _,_,_,characterHistory=state();assert(#characterHistory==0,"character polluted game launch history")
+assert(lastUrl:find("Rift-Hub-Hulk/main/main.lua?cb=",1,true))
+fetchError=true;m,state=controller();assert(not m.Execute(m.Characters[1]));closed,restarted,open=state();assert(closed==0 and open);fetchError=false
+source="invalid code @@";m,state=controller();assert(not m.Execute(m.Characters[1]));closed,restarted,open=state();assert(closed==0 and open)
+local characterCleanups=0
+env.RiftHulkCharacter={Unload=function() characterCleanups+=1 end}
+local previousHulkCleanups=hulkCleanup
+source="return {Game='Survive The Hulk',Gui={Parent=true}}";m,state=controller();assert(not m.Execute(m.Characters[1]))
+closed,restarted,open=state();assert(closed==1 and restarted==1 and open and characterCleanups==1)
+assert(hulkCleanup==previousHulkCleanups,"character failure unloaded the survival game script")
+source="return {Game='Hulk',Gui={Parent=true}}";m,state=controller();fetchHook=function() m.Dispose() end
+assert(not m.Execute(m.Characters[1]));closed,restarted,open=state();assert(closed==0 and open);fetchHook=nil
+m,state=controller();assert(not m.Execute({Name="Hulk",Universal=true,Url=character.Url}))
+m,state=controller();fetchHook=function() duplicateResult=m.Execute(m.Characters[1]) end
+assert(m.Execute(m.Characters[1]) and duplicateResult==false);fetchHook=nil
+print("PASS: standalone Hulk repository, universal character launch, guarded startup, rollback, cancellation and duplicate protection.")
+
 -- Slider/keybind handlers must disappear when the main window is destroyed.
 local function signal()
 	local event = { handlers = {} }

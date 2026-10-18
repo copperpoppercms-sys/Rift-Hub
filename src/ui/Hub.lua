@@ -330,26 +330,22 @@ local function buildHeroVillain(panel, ctx)
 		BackgroundTransparency = 1, FontFace = Kit.face("BuilderSans"), TextSize = 10, TextColor3 = Kit.FAINT,
 		TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = "Hold-to-charge leap",
 	}, tile)
-	local leap = ctx.Features.HulkLeap
-	if leap then
-		leap.CanUse = function()
-			if ctx.Features.Fly and ctx.Features.Fly.Config.Enabled then return false, "Turn off flight before leaping" end
-			return true
-		end
-		leap.OnEnabledChanged = function(on)
-			if status.Parent then status.Text = on and "Hold LEAP to charge · release to launch" or "Hold-to-charge leap" end
-		end
-		ctx.Janitor.add(function() leap.OnEnabledChanged = nil end)
-	end
+	local characterLibrary = ctx.GameLibrary and ctx.GameLibrary(ctx)
+	local hulk = characterLibrary and characterLibrary.Characters and characterLibrary.Characters[1]
+	local loading = false
 	ctx.Janitor.add(button.Activated:Connect(function()
+		if loading then return end
 		Kit.Click()
-		if not leap then status.Text = "Leap controls couldn’t load. Reopen Rift to retry."; return end
-		local allowed, reason = leap.CanUse()
-		if not allowed then status.Text = reason; return end
-		local ok, err = leap.SetEnabled(true)
-		if not ok then status.Text = "Leap controls couldn’t open."; warn("[RiftHub] Hulk leap: " .. tostring(err)); return end
-		status.Text = "Hold LEAP to charge · release to launch"
-		ctx.Minimize()
+		if not hulk then status.Text = "Hulk loader couldn’t load. Reopen Rift to retry."; return end
+		loading = true; button.Text = "Opening…"
+		task.spawn(function()
+			local ok, err = characterLibrary.Execute(hulk)
+			loading = false
+			if tile.Parent then
+				button.Text = "Exterminate"
+				if not ok then status.Text = tostring(err) end
+			end
+		end)
 	end))
 	ctx.Janitor.add(tile.MouseEnter:Connect(function() Kit.tween(rim, { Color = green, Transparency = 0.05 }, 0.14) end))
 	ctx.Janitor.add(tile.MouseLeave:Connect(function() Kit.tween(rim, { Color = Kit.BORDER, Transparency = 0.25 }, 0.14) end))
@@ -853,7 +849,7 @@ local function buildSettings(panel, ctx)
 			executorName = identifyexecutor()
 		end
 	end)
-	Kit.PlainRow(about, "Version", "2.2.0")
+	Kit.PlainRow(about, "Version", "2.3.0")
 	Kit.PlainRow(about, "Created by", "N0VA_0100")
 	Kit.PlainRow(about, "Executor", executorName)
 	Kit.PlainRow(about, "Place", ctx.PlaceName)
@@ -861,7 +857,7 @@ local function buildSettings(panel, ctx)
 	Kit.Button(about, "Copy diagnostics", nil, "Copy", function()
 		pcall(function()
 			local diag = string.format(
-				"Rift hub 2.2.0 | executor: %s | place: %s (%d) | players: %d/%d",
+				"Rift hub 2.3.0 | executor: %s | place: %s (%d) | players: %d/%d",
 				executorName, ctx.PlaceName, game.PlaceId, #Players:GetPlayers(), Players.MaxPlayers)
 			if type(setclipboard) == "function" then setclipboard(diag) end
 		end)
@@ -1202,8 +1198,6 @@ local function Open(opts)
 		LibraryState = opts.LibraryState, LibraryView = opts.LibraryView,
 		SelectTab = selectTab,
 	}
-
-	function ctx.Minimize() if setVisible then setVisible(false) end end
 
 	local fit = 1
 	local quickSearch

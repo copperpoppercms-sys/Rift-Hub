@@ -83,7 +83,6 @@ local function onReady()
 	local FlyCtor = loadModule("src/features/Fly.lua")
 	local AntiAFKCtor = loadModule("src/features/AntiAFK.lua")
 	local MovementCtor = loadModule("src/features/Movement.lua")
-	local HulkLeapCtor = loadModule("src/features/HulkLeap.lua")
 	local TriggerbotCtor = loadModule("src/features/Triggerbot.lua")
 	local ChamsCtor = loadModule("src/features/Chams.lua")
 	local FullbrightCtor = loadModule("src/features/Fullbright.lua")
@@ -109,7 +108,6 @@ local function onReady()
 	-- newer, optional feature modules -- the hub still opens if one of these
 	-- fails to fetch, just without that tab's section
 	if MovementCtor then Rift.Features.Movement = MovementCtor(Rift.Utils) end
-	if HulkLeapCtor then Rift.Features.HulkLeap = HulkLeapCtor(Rift.Utils, Kit) end
 	if TriggerbotCtor then Rift.Features.Triggerbot = TriggerbotCtor(Rift.Utils) end
 	if ChamsCtor then Rift.Features.Chams = ChamsCtor(Rift.Utils) end
 	if FullbrightCtor then Rift.Features.Fullbright = FullbrightCtor() end
