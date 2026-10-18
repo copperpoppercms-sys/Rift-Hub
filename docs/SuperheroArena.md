@@ -1,6 +1,6 @@
 # Rift Hub · Superhero Arena
 
-The current v5.5 script is maintained in [Rift-Hub-Superhero-Arena](https://github.com/copperpoppercms-sys/Rift-Hub-Superhero-Arena). The main hub’s game catalogue fetches that repository’s `main.lua`; `games/superhero-arena.lua` is a compatibility loader.
+The current v5.6 script is maintained in [Rift-Hub-Superhero-Arena](https://github.com/copperpoppercms-sys/Rift-Hub-Superhero-Arena). The main hub’s game catalogue fetches that repository’s `main.lua`; `games/superhero-arena.lua` is a compatibility loader.
 
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-Superhero-Arena/main/main.lua"))()
@@ -12,4 +12,4 @@ The Hub card uses Roblox’s published game icon and the same compact card style
 
 Download [the editable HTML](https://github.com/copperpoppercms-sys/Rift-Hub-Superhero-Arena/blob/main/docs/SuperheroArena_Editor.html) and open it in a browser to copy or edit the complete code. Standalone behavior checks live in that repository’s `tests/`. This repository checks the catalogue handoff and forwarding loader.
 
-v5.5 fixes the live report's zero-attempt failure: holding movement no longer pauses Ultra Instinct. A short assist can run for up to 0.18 seconds while you are moving, then live manual input resumes. The native dash cooldown and normal walking fallback remain unchanged. Attack avoidance still requires live verification.
+v5.6 uses mobile HUD touches instead of keyboard events on touch devices, addressing a likely cause of the joystick disappearing. Estimated escapes target larger diagonal retreats with up to 0.5 seconds of normal walking. Changing or releasing the movement stick immediately returns control. Native dash cooldowns remain enforced; attack avoidance and live mobile input behavior still require verification.
