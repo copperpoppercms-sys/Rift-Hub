@@ -1,3 +1,4 @@
+-- RiftHub-Module: game-library
 -- Small game catalogue with a guarded handoff to the standalone game window.
 local MM2_RAW = "https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-MM2/main/"
 local MM2 = {
@@ -29,6 +30,7 @@ local HULK = {
 
 local HULK_CHARACTER = {
 	Id = "hulk-character", Name = "Hulk", ShortName = "Hulk", Universal = true,
+	SourceHeader = "-- RiftHub-Entry: hulk-character",
 	ChunkName = "RiftHubHulk/main.lua",
 	Url = "https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-Hulk/main/main.lua",
 }
@@ -73,6 +75,10 @@ return function(ctx)
 		if disposed then busy = false; return false, "Hub is closed" end
 		if not ok or type(source) ~= "string" or source == "" then
 			busy = false; M.Status = "Could not fetch script"; return false, M.Status
+		end
+		if item.SourceHeader and source:sub(1,#item.SourceHeader)~=item.SourceHeader then
+			busy=false;M.Status="Wrong character script refused; reopen Rift and retry"
+			return false,M.Status
 		end
 		local chunk, compileError = loadstring(source, "=" .. item.ChunkName)
 		if not chunk then

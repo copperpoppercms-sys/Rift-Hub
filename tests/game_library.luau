@@ -149,7 +149,7 @@ m,state=controller();local character=m.Characters[1]
 assert(character.Id=="hulk-character" and character.Name=="Hulk" and character.Universal==true)
 assert(#m.Games==3 and character.Url=="https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-Hulk/main/main.lua")
 game.PlaceId,game.GameId=999,999
-source="return {Game='Hulk',Gui={Parent=true}}"
+source="-- RiftHub-Entry: hulk-character\nreturn {Game='Hulk',Gui={Parent=true}}"
 m,state=controller();assert(m.Execute(m.Characters[1]))
 closed,restarted,open=state();assert(closed==1 and not open and restarted==0)
 local _,_,_,characterHistory=state();assert(#characterHistory==0,"character polluted game launch history")
@@ -159,15 +159,25 @@ source="invalid code @@";m,state=controller();assert(not m.Execute(m.Characters[
 local characterCleanups=0
 env.RiftHulkCharacter={Unload=function() characterCleanups+=1 end}
 local previousHulkCleanups=hulkCleanup
-source="return {Game='Survive The Hulk',Gui={Parent=true}}";m,state=controller();assert(not m.Execute(m.Characters[1]))
+source="-- RiftHub-Entry: hulk-character\nreturn {Game='Survive The Hulk',Gui={Parent=true}}";m,state=controller();assert(not m.Execute(m.Characters[1]))
 closed,restarted,open=state();assert(closed==1 and restarted==1 and open and characterCleanups==1)
 assert(hulkCleanup==previousHulkCleanups,"character failure unloaded the survival game script")
-source="return {Game='Hulk',Gui={Parent=true}}";m,state=controller();fetchHook=function() m.Dispose() end
+source="-- RiftHub-Entry: hulk-character\nreturn {Game='Hulk',Gui={Parent=true}}";m,state=controller();fetchHook=function() m.Dispose() end
 assert(not m.Execute(m.Characters[1]));closed,restarted,open=state();assert(closed==0 and open);fetchHook=nil
 m,state=controller();assert(not m.Execute({Name="Hulk",Universal=true,Url=character.Url}))
 m,state=controller();fetchHook=function() duplicateResult=m.Execute(m.Characters[1]) end
 assert(m.Execute(m.Characters[1]) and duplicateResult==false);fetchHook=nil
 print("PASS: standalone Hulk repository, universal character launch, guarded startup, rollback, cancellation and duplicate protection.")
+
+-- A wrong response must be rejected before it runs or closes the main hub.
+source="error('unrelated Spider-Man source executed')"
+m,state=controller();local okWrong,wrongMessage=m.Execute(m.Characters[1])
+closed,restarted,open=state()
+assert(not okWrong and wrongMessage:find("Wrong character script",1,true) and closed==0 and restarted==0 and open)
+source="-- RiftHub-Entry: hulk-character\nerror('Hulk runtime failure')"
+m,state=controller();assert(not m.Execute(m.Characters[1]))
+closed,restarted,open=state();assert(closed==1 and restarted==1 and open)
+print("PASS: mismatched character source is rejected before execution or main-UI unload.")
 
 -- Slider/keybind handlers must disappear when the main window is destroyed.
 local function signal()

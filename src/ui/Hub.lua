@@ -1,3 +1,4 @@
+-- RiftHub-Module: main-ui
 -- Luau | Roblox | Xeno/Synapse-class executor | RiftHub main window
 -- Responsive graphite shell, personal library and native quick search.
 -- Feature controls continue to use the existing modules and shared widget kit.
@@ -849,7 +850,7 @@ local function buildSettings(panel, ctx)
 			executorName = identifyexecutor()
 		end
 	end)
-	Kit.PlainRow(about, "Version", "2.3.0")
+	Kit.PlainRow(about, "Version", "2.3.1")
 	Kit.PlainRow(about, "Created by", "N0VA_0100")
 	Kit.PlainRow(about, "Executor", executorName)
 	Kit.PlainRow(about, "Place", ctx.PlaceName)
@@ -1278,7 +1279,10 @@ local function Open(opts)
 		if Features.ESP and Features.ESP.Destroy then pcall(Features.ESP.Destroy) end
 		if island then island.Destroy() end
 		janitor.clean()
-		if type(getgenv) == "function" then getgenv().__RiftHubLoaded = false end
+		if type(getgenv)=="function" then
+			local env=getgenv()
+			if not env.Rift or env.Rift.Hub==handle then env.__RiftHubLoaded=false end
+		end
 	end
 
 	for _, navItem in ipairs(NAV) do
@@ -1337,6 +1341,7 @@ local function Open(opts)
 	end))
 
 	handle = {
+		Game = "Rift Hub",
 		Gui = gui,
 		SelectTab = selectTab,
 		SetVisible = setVisible,

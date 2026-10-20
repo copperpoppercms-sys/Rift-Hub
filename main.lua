@@ -1,12 +1,29 @@
+-- RiftHub-Entry: universal
 -- Luau | Roblox | Xeno/Synapse-class executor | RiftHub entrypoint
 -- loadstring(game:HttpGet("https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub/main/main.lua"))()
 
-if getgenv then
-	if getgenv().__RiftHubLoaded then
-		return
-	end
-	getgenv().__RiftHubLoaded = true
+local env = type(getgenv)=="function" and getgenv() or _G
+-- Re-execution must reopen the main UI, even after a failed startup or character handoff.
+local startupTicket={}
+env.__RiftHubStartupTicket=startupTicket
+local function currentStartup() return env.__RiftHubStartupTicket==startupTicket end
+local previous=env.Rift
+if type(previous)=="table" then
+ if type(previous.Hub)=="table" and type(previous.Hub.Unload)=="function" then pcall(previous.Hub.Unload)
+ elseif type(previous.Features)=="table" then
+  for _,feature in pairs(previous.Features) do
+   if type(feature)=="table" and type(feature.Stop)=="function" then pcall(feature.Stop) end
+  end
+ end
 end
+for _,key in ipairs({"RiftHulkCharacter","RiftHulkHub","SuperheroArenaHub"}) do
+ local active=env[key]
+ if type(active)=="table" and type(active.Unload)=="function" then pcall(active.Unload) end
+end
+if type(env.MONO_Unload)=="function" then pcall(env.MONO_Unload) end
+if type(env.RiftMM2StartupCleanup)=="function" then pcall(env.RiftMM2StartupCleanup) end
+env.__RiftHubLoaded=false
+env.Rift=nil
 
 local REPO_OWNER = "copperpoppercms-sys"
 local REPO_NAME = "Rift-Hub"
@@ -17,7 +34,7 @@ local INTRO_ENABLED = false
 
 -- fetches a raw file from the repo, cache-busted, with one retry on transient HttpGet failure
 local function fetchRaw(path)
-	local url = RAW_BASE .. path .. "?cb=" .. tostring(os.time())
+	local url = RAW_BASE .. path .. "?cb=" .. tostring(os.time()) .. "-" .. tostring(math.floor(os.clock()*1000))
 	local ok, body = pcall(game.HttpGet, game, url)
 	if not ok then
 		task.wait(0.5)
@@ -30,11 +47,22 @@ local function fetchRaw(path)
 end
 
 -- fetch + compile + run a module file, returning whatever it returns
+local moduleHeaders={
+ ["src/ui/Hub.lua"]="-- RiftHub-Module: main-ui",
+ ["src/ui/GameLibrary.lua"]="-- RiftHub-Module: game-library",
+}
 local function loadModule(path)
+	if not currentStartup() then return nil end
 	local source, fetchErr = fetchRaw(path)
 	if not source then
 		warn(string.format("[RiftHub] could not fetch %s: %s", path, tostring(fetchErr)))
 		return nil
+	end
+
+	if not currentStartup() then return nil end
+	local header=moduleHeaders[path]
+	if header and source:sub(1,#header)~=header then
+		warn("[RiftHub] mismatched module refused: "..path);return nil
 	end
 
 	local chunk, compileErr = loadstring(source, "=RiftHub/" .. path)
@@ -52,19 +80,20 @@ local function loadModule(path)
 	return result
 end
 
-local Rift = {}
+local Rift = {Game="Rift Hub",Version="2.3.1"}
 Rift.Utils = loadModule("src/core/Utils.lua")
 Rift.Config = loadModule("src/core/Config.lua")
 
-if not Rift.Utils or not Rift.Config then
-	if type(getgenv) == "function" then getgenv().__RiftHubLoaded = false end
+if type(Rift.Utils)~="table" or type(Rift.Config)~="table" then
+	if currentStartup() then env.__RiftHubLoaded=false end
 	warn("[RiftHub] core modules failed to load, aborting")
 	return
 end
 
 -- runs once the intro finishes; opens the main window
+local openHub
 local function onReady()
-	if type(getgenv) == "function" then getgenv().__RiftHubLoaded = true end
+	if not currentStartup() then return nil end
 	local Kit = loadModule("src/ui/Kit.lua")
 	local BrandCtor = loadModule("src/ui/Brand.lua")
 	local Brand = BrandCtor and BrandCtor(RAW_BASE .. "assets/rift_logo.jpg")
@@ -91,20 +120,18 @@ local function onReady()
 	local WaypointsCtor = loadModule("src/features/Waypoints.lua")
 	local ServerToolsCtor = loadModule("src/features/ServerTools.lua")
 
-	if not (Kit and OpenHub and AimAssistCtor and ESPCtor and FlyCtor and AntiAFKCtor) then
-		if type(getgenv) == "function" then getgenv().__RiftHubLoaded = false end
+	if not (type(Kit)=="table" and type(OpenHub)=="function" and type(GameLibrary)=="function" and type(AimAssistCtor)=="function" and type(ESPCtor)=="function" and type(FlyCtor)=="function" and type(AntiAFKCtor)=="function") then
+		if currentStartup() then env.__RiftHubLoaded=false end
 		warn("[RiftHub] UI modules failed to load, no window opened")
-		if getgenv then getgenv().Rift = Rift end
-		return
+		return nil
 	end
 
 	Rift.Kit = Kit
-	Rift.Features = {
-		AimAssist = AimAssistCtor(Rift.Utils),
-		ESP = ESPCtor(Rift.Utils),
-		Fly = FlyCtor(Rift.Utils),
-		AntiAFK = AntiAFKCtor(),
-	}
+	Rift.Features = {}
+	Rift.Features.AimAssist = AimAssistCtor(Rift.Utils)
+	Rift.Features.ESP = ESPCtor(Rift.Utils)
+	Rift.Features.Fly = FlyCtor(Rift.Utils)
+	Rift.Features.AntiAFK = AntiAFKCtor()
 	-- newer, optional feature modules -- the hub still opens if one of these
 	-- fails to fetch, just without that tab's section
 	if MovementCtor then Rift.Features.Movement = MovementCtor(Rift.Utils) end
@@ -126,18 +153,33 @@ local function onReady()
 		HomeVideo = HomeVideo,
 		GameLibrary = GameLibrary,
 		LibraryState = LibraryState, LibraryView = LibraryView, QuickSearch = QuickSearch,
-		OnRestart = onReady,
+		OnRestart = function() return openHub() end,
 		ToggleKey = Enum.KeyCode.RightShift,
 	})
 
-	if getgenv then
-		getgenv().Rift = Rift
-	end
+ if not currentStartup() then if Rift.Hub and Rift.Hub.Unload then pcall(Rift.Hub.Unload) end;return nil end
+ assert(type(Rift.Hub)=="table" and Rift.Hub.Game=="Rift Hub" and Rift.Hub.Gui and Rift.Hub.Gui.Parent,
+  "Main hub window did not finish opening")
+ env.Rift=Rift;env.__RiftHubLoaded=true
+ return Rift
+end
+openHub=function()
+ local ok,result=pcall(onReady)
+ if ok and result then return result end
+ for _,feature in pairs(Rift.Features or {}) do
+  if type(feature)=="table" and type(feature.Stop)=="function" then pcall(feature.Stop) end
+ end
+ if Rift.Hub and type(Rift.Hub.Unload)=="function" then pcall(Rift.Hub.Unload) end
+ if currentStartup() then env.__RiftHubLoaded=false;env.Rift=nil end
+ warn("[RiftHub] main startup failed: "..tostring(result or "required module unavailable"))
+ return nil
 end
 
 if INTRO_ENABLED then
 	local PlayIntro = loadModule("src/ui/Intro.lua")
-	if PlayIntro then PlayIntro({ OnComplete = onReady }) else onReady() end
+	if PlayIntro then PlayIntro({ OnComplete = openHub }) else openHub() end
 else
-	onReady()
+	openHub()
 end
+
+return env.Rift

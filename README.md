@@ -5,7 +5,7 @@ Prepared from the saved universal hub, intro, home-video and game launcher sourc
 Run the universal hub:
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub/main/main.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub/main/execute.lua?cb=" .. tostring(os.time())))()
 ```
 
 The universal hub now opens **Rift Personal Space 2.3**: a graphite interface with violet accents, a searchable game library, pinned favorites and a compact layout for portrait phones. **Search Rift** opens a native command palette; desktop users can also press **Ctrl+K**. Search for a section, a tool such as fly or ESP, or a game. Selecting a result takes you to its controls without automatically enabling a feature.
@@ -14,7 +14,7 @@ The **Hub** tab includes **Murder Mystery 2**, **Superhero Arena** and **Survive
 
 Execute opens that game’s separate script and closes the universal hub. Join the selected game first; failed downloads leave the main hub open, and failed startup restores it. The last-opened entry updates only after the new window is validated. This update changes the universal interface, not the separate games’ gameplay controllers.
 
-The **Hero / Villain** section starts with a compact **Hulk** card, a standalone Hulk comic portrait, the description **huge rage**, and an **Exterminate** button. Exterminate loads the standalone [Rift Hub Hulk](https://github.com/copperpoppercms-sys/Rift-Hub-Hulk) script and closes the main hub after a validated handoff. Failed startup restores the main hub. Hold **LEAP** to fill the power bar and crouch; release to launch upward and forward. The separate script tries the supplied clip IDs and uses local R6/R15 joint poses when clips fail to load or match the rig. Full charge holds until release. Search Rift can also open the section.
+The **Hero / Villain** section starts with a compact **Hulk** card, a standalone Hulk comic portrait, the description **huge rage**, and an **Exterminate** button. Exterminate loads the standalone [Rift Hub Hulk](https://github.com/copperpoppercms-sys/Rift-Hub-Hulk) script and closes the main hub after a validated handoff. Failed startup restores the main hub. Hold **LEAP** to fill the power bar and crouch; release to launch upward and forward. The separate script uses original Hulk motion by default and offers an optional researched catalog pack with local pose fallback. Full charge holds until release. Search Rift can also open the section.
 
 All four scripts use the uploaded Rift Hub logo. The original JPEG is retained in each repository; compact headers and minimized controls use its R emblem. An executor without custom-image support keeps a text fallback. The intro stays disabled and its saved files remain unchanged.
 
@@ -48,3 +48,13 @@ These checks verify compilation and simulated behavior. Playback, game controls 
 `execute.lua` contains the copy/paste execution snippet for this repository.
 
 Hulk character portrait: [Marvel](https://cdn.marvel.com/content/1x/006hbb_com_crd_01.jpg). Original image bytes and source information are retained in `assets/hulk_portrait.jpg` and `assets/hulk_portrait_source.json`.
+
+## Main startup repair · 2.3.1
+
+The main execution snippet opens the universal **Rift Hub** window and returns its API. Character scripts run only from their card buttons. The Hulk card points only to `Rift-Hub-Hulk`; it checks the response identity before compiling or closing the main hub. Both entry snippets add cache-busting parameters and reject a wrong script response.
+
+Re-executing the main entry unloads the previous Rift UI and active Rift game/character APIs, then opens the main UI again. A stale `__RiftHubLoaded` flag cannot suppress startup. Failed startup cleans up partially constructed features, and an older in-flight startup cannot overwrite a newer one. Existing intro source and media remain preserved, with the intro disabled.
+
+No Spider-Man/web-swing loader is present in this repository or the Hulk entrypoint. If an unrelated script was executed separately in the same Roblox session, rejoin once to stop its untracked background callbacks, then use the main snippet above. The exact loader used and live UI are still needed to confirm why that separate UI appeared.
+
+`tests/run_startup.py` checks main-only startup, stale state, reload, constructor failure, superseded startup and rejection of a wrong main response. `tests/run_game_library.py` also checks that wrong Hulk source is refused before executing or closing the main window.
