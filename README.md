@@ -58,3 +58,7 @@ Re-executing the main entry unloads the previous Rift UI and active Rift game/ch
 No Spider-Man/web-swing loader is present in this repository or the Hulk entrypoint. If an unrelated script was executed separately in the same Roblox session, rejoin once to stop its untracked background callbacks, then use the main snippet above. The exact loader used and live UI are still needed to confirm why that separate UI appeared.
 
 `tests/run_startup.py` checks main-only startup, stale state, reload, constructor failure, superseded startup and rejection of a wrong main response. `tests/run_game_library.py` also checks that wrong Hulk source is refused before executing or closing the main window.
+
+### Spider-Man character
+
+Hero / Villain now includes a Spider-Man picture card and Execute button, alongside Hulk. It launches the separate [Rift-Hub-spiderman](https://github.com/copperpoppercms-sys/Rift-Hub-spiderman) controller and closes the main hub after source validation. The main startup opens only the hub; character scripts are not auto-executed.

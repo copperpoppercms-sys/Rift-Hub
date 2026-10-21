@@ -16,7 +16,7 @@ if type(previous)=="table" then
   end
  end
 end
-for _,key in ipairs({"RiftHulkCharacter","RiftHulkHub","SuperheroArenaHub"}) do
+for _,key in ipairs({"RiftSpiderMan","RiftHulkCharacter","RiftHulkHub","SuperheroArenaHub"}) do
  local active=env[key]
  if type(active)=="table" and type(active.Unload)=="function" then pcall(active.Unload) end
 end
@@ -80,7 +80,7 @@ local function loadModule(path)
 	return result
 end
 
-local Rift = {Game="Rift Hub",Version="2.3.1"}
+local Rift = {Game="Rift Hub",Version="2.4.0"}
 Rift.Utils = loadModule("src/core/Utils.lua")
 Rift.Config = loadModule("src/core/Config.lua")
 
