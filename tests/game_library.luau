@@ -230,19 +230,5 @@ input.InputBegan:Fire({ UserInputType=Enum.UserInputType.Keyboard, KeyCode=Enum.
 assert(bindCalls==0,"destroyed keybind still captures keys")
 print("PASS: main-window slider and keybind handlers are disconnected on destruction.")
 
--- Spider-Man is a separate universal character with a checked standalone handoff.
-fetchError=false;fetchHook=nil
-m,state=controller();local spider=m.Characters[2]
-assert(spider.Id=="spiderman-character" and spider.Name=="Spider-Man" and spider.Universal)
-assert(spider.Url=="https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-spiderman/main/main.lua")
-source="-- RiftHub-Entry: spiderman-character\nreturn {Game='Spider-Man',Gui={Parent=true}}"
-assert(m.Execute(spider));closed,restarted,open=state();assert(closed==1 and not open)
-assert(lastUrl:find("Rift-Hub-spiderman/main/main.lua?cb=",1,true))
-source="-- RiftHub-Entry: hulk-character\nreturn {Game='Hulk',Gui={Parent=true}}"
-m,state=controller();assert(not m.Execute(m.Characters[2]));closed,restarted,open=state();assert(closed==0 and open)
-local spiderCleanup=0
-env.RiftSpiderMan={Unload=function() spiderCleanup+=1 end}
-source="-- RiftHub-Entry: spiderman-character\nerror('Spider startup failed')"
-m,state=controller();assert(not m.Execute(m.Characters[2]));assert(spiderCleanup==1)
-closed,restarted,open=state();assert(closed==1 and restarted==1 and open)
-print("PASS: Spider-Man standalone identity, wrong-source refusal, rollback and isolated cleanup.")
+-- Only the retained Hulk character is offered.
+m,state=controller();assert(#m.Characters==1 and m.Characters[1].Name=='Hulk')

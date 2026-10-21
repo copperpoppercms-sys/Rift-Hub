@@ -59,6 +59,6 @@ No Spider-Man/web-swing loader is present in this repository or the Hulk entrypo
 
 `tests/run_startup.py` checks main-only startup, stale state, reload, constructor failure, superseded startup and rejection of a wrong main response. `tests/run_game_library.py` also checks that wrong Hulk source is refused before executing or closing the main window.
 
-### Spider-Man character
+### Superhero Arena update
 
-Hero / Villain now includes a Spider-Man picture card and Execute button, alongside Hulk. It launches the separate [Rift-Hub-spiderman](https://github.com/copperpoppercms-sys/Rift-Hub-spiderman) controller and closes the main hub after source validation. The main startup opens only the hub; character scripts are not auto-executed.
+The Superhero Arena card launches the animated Rift interface with Auto Farm, Fast Attack, low-health retreat and speed controls. Spider-Man has been removed from the hub's character list and forwarding loaders. Existing standalone files in its separate repository are retained.

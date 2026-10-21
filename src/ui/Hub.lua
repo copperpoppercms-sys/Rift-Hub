@@ -270,102 +270,90 @@ local function buildHeroVillain(panel, ctx)
 		SortOrder = Enum.SortOrder.LayoutOrder, CellSize = UDim2.new(0.5, -6, 0, 156),
 		CellPadding = UDim2.fromOffset(12, 12), FillDirectionMaxCells = 2,
 	}, cards)
+	local green = Color3.fromRGB(106, 194, 119)
+	local tile = Kit.create("Frame", {
+		Name = "HulkCard", LayoutOrder = 1, Size = UDim2.fromOffset(320, 156), BackgroundColor3 = Kit.PANEL,
+		BorderSizePixel = 0,
+	}, cards)
+	Kit.create("UICorner", { CornerRadius = UDim.new(0, 12) }, tile)
+	local rim = Kit.create("UIStroke", { Color = Kit.BORDER, Transparency = 0.25, Thickness = 1 }, tile)
+	Kit.Surface(tile)
+	local image = Kit.create("ImageLabel", {
+		Position = UDim2.fromOffset(14, 14), Size = UDim2.fromOffset(40, 40),
+		BackgroundColor3 = Kit.VOID, BorderSizePixel = 0, ScaleType = Enum.ScaleType.Crop,
+		Name = "HulkPortrait", Image = "",
+	}, tile)
+	Kit.create("UICorner", { CornerRadius = UDim.new(0, 9) }, image)
+	local imageFallback = Kit.create("TextLabel", {
+		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "H",
+		FontFace = Kit.face("BuilderSans", Enum.FontWeight.Bold), TextSize = 20, TextColor3 = green,
+	}, image)
+	task.spawn(function()
+		local ok, asset = pcall(function()
+			local register = type(getcustomasset) == "function" and getcustomasset or type(getsynasset) == "function" and getsynasset
+			assert(register and type(writefile) == "function" and type(isfile) == "function", "Custom images unavailable")
+			local path = "RiftHub/hulk-portrait-a6c682101a76.jpg"
+			if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder("RiftHub") then makefolder("RiftHub") end
+			if not isfile(path) then
+				local bytes = game:HttpGet("https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub/main/assets/hulk_portrait.jpg")
+				assert(type(bytes) == "string" and bytes:sub(1, 3) == string.char(255, 216, 255), "Invalid Hulk portrait")
+				writefile(path, bytes)
+			end
+			local content = register(path)
+			assert(type(content) == "string" and content ~= "", "Portrait registration failed")
+			return content
+		end)
+		if ok and image.Parent then
+			image.Image = asset
+			imageFallback.Visible = false
+		end
+	end)
+
+	Kit.create("TextLabel", {
+		Position = UDim2.fromOffset(66, 13), Size = UDim2.new(1, -80, 0, 22), BackgroundTransparency = 1,
+		FontFace = Kit.face("BuilderSans", Enum.FontWeight.Medium), TextSize = 14, TextColor3 = Kit.INK,
+		TextXAlignment = Enum.TextXAlignment.Left, Text = "Hulk",
+	}, tile)
+	Kit.create("TextLabel", {
+		Position = UDim2.fromOffset(66, 38), Size = UDim2.new(1, -80, 0, 16), BackgroundTransparency = 1,
+		FontFace = Kit.face("BuilderSans"), TextSize = 12, TextColor3 = green,
+		TextXAlignment = Enum.TextXAlignment.Left, Text = "huge rage",
+	}, tile)
+	local button = Kit.create("TextButton", {
+		Name = "Exterminate", Position = UDim2.fromOffset(14, 68), Size = UDim2.fromOffset(118, 34),
+		BackgroundColor3 = Color3.fromRGB(50, 107, 64), BorderSizePixel = 0, AutoButtonColor = false,
+		FontFace = Kit.face("BuilderSans", Enum.FontWeight.Medium), TextSize = 12, TextColor3 = Kit.INK,
+		Text = "Exterminate",
+	}, tile)
+	Kit.create("UICorner", { CornerRadius = UDim.new(0, 8) }, button)
+	local status = Kit.create("TextLabel", {
+		Name = "HulkPreviewStatus", Position = UDim2.fromOffset(14, 115), Size = UDim2.new(1, -28, 0, 28),
+		BackgroundTransparency = 1, FontFace = Kit.face("BuilderSans"), TextSize = 10, TextColor3 = Kit.FAINT,
+		TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = "Hold-to-charge leap",
+	}, tile)
 	local characterLibrary = ctx.GameLibrary and ctx.GameLibrary(ctx)
-	local entries={
-		{Name="Hulk",CardName="HulkCard",Initial="H",Description="huge rage",ButtonText="Exterminate",Hint="Hold-to-charge leap",
-		 Color=Color3.fromRGB(106,194,119),ButtonColor=Color3.fromRGB(50,107,64),File="RiftHub/hulk-portrait-a6c682101a76.jpg",
-		 ImageUrl="https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub/main/assets/hulk_portrait.jpg"},
-		{Name="Spider-Man",CardName="SpiderManCard",Initial="S",Description="swing through the city",ButtonText="Execute",Hint="Opens Spider-Man and closes hub",
-		 Color=Color3.fromRGB(237,79,96),ButtonColor=Color3.fromRGB(146,35,53),File="RiftHub/spiderman-portrait-v1.jpg",
-		 ImageUrl="https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-spiderman/main/assets/spiderman_portrait.jpg"},
-	}
-	for index,entry in ipairs(entries) do
-		local green = entry.Color
-		local tile = Kit.create("Frame", {
-			Name = entry.CardName, LayoutOrder = index, Size = UDim2.fromOffset(320, 156), BackgroundColor3 = Kit.PANEL,
-			BorderSizePixel = 0,
-		}, cards)
-		Kit.create("UICorner", { CornerRadius = UDim.new(0, 12) }, tile)
-		local rim = Kit.create("UIStroke", { Color = Kit.BORDER, Transparency = 0.25, Thickness = 1 }, tile)
-		Kit.Surface(tile)
-		local image = Kit.create("ImageLabel", {
-			Position = UDim2.fromOffset(14, 14), Size = UDim2.fromOffset(40, 40),
-			BackgroundColor3 = Kit.VOID, BorderSizePixel = 0, ScaleType = Enum.ScaleType.Crop,
-			Name = entry.CardName.."Portrait", Image = "",
-		}, tile)
-		Kit.create("UICorner", { CornerRadius = UDim.new(0, 9) }, image)
-		local imageFallback = Kit.create("TextLabel", {
-			Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = entry.Initial,
-			FontFace = Kit.face("BuilderSans", Enum.FontWeight.Bold), TextSize = 20, TextColor3 = green,
-		}, image)
+	local hulk = characterLibrary and characterLibrary.Characters and characterLibrary.Characters[1]
+	local loading = false
+	ctx.Janitor.add(button.Activated:Connect(function()
+		if loading then return end
+		Kit.Click()
+		if not hulk then status.Text = "Hulk loader couldn’t load. Reopen Rift to retry."; return end
+		loading = true; button.Text = "Opening…"
 		task.spawn(function()
-			local ok, asset = pcall(function()
-				local register = type(getcustomasset) == "function" and getcustomasset or type(getsynasset) == "function" and getsynasset
-				assert(register and type(writefile) == "function" and type(isfile) == "function", "Custom images unavailable")
-				local path = entry.File
-				if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder("RiftHub") then makefolder("RiftHub") end
-				if not isfile(path) then
-					local bytes = game:HttpGet(entry.ImageUrl)
-					assert(type(bytes) == "string" and bytes:sub(1, 3) == string.char(255, 216, 255), "Invalid character portrait")
-					writefile(path, bytes)
-				end
-				local content = register(path)
-				assert(type(content) == "string" and content ~= "", "Portrait registration failed")
-				return content
-			end)
-			if ok and image.Parent then
-				image.Image = asset
-				imageFallback.Visible = false
+			local ok, err = characterLibrary.Execute(hulk)
+			loading = false
+			if tile.Parent then
+				button.Text = "Exterminate"
+				if not ok then status.Text = tostring(err) end
 			end
 		end)
-
-		Kit.create("TextLabel", {
-			Position = UDim2.fromOffset(66, 13), Size = UDim2.new(1, -80, 0, 22), BackgroundTransparency = 1,
-			FontFace = Kit.face("BuilderSans", Enum.FontWeight.Medium), TextSize = 14, TextColor3 = Kit.INK,
-			TextXAlignment = Enum.TextXAlignment.Left, Text = entry.Name,
-		}, tile)
-		Kit.create("TextLabel", {
-			Position = UDim2.fromOffset(66, 38), Size = UDim2.new(1, -80, 0, 16), BackgroundTransparency = 1,
-			FontFace = Kit.face("BuilderSans"), TextSize = 12, TextColor3 = green,
-			TextXAlignment = Enum.TextXAlignment.Left, Text = entry.Description,
-		}, tile)
-		local button = Kit.create("TextButton", {
-			Name = entry.ButtonText, Position = UDim2.fromOffset(14, 68), Size = UDim2.fromOffset(118, 34),
-			BackgroundColor3 = entry.ButtonColor, BorderSizePixel = 0, AutoButtonColor = false,
-			FontFace = Kit.face("BuilderSans", Enum.FontWeight.Medium), TextSize = 12, TextColor3 = Kit.INK,
-			Text = entry.ButtonText,
-		}, tile)
-		Kit.create("UICorner", { CornerRadius = UDim.new(0, 8) }, button)
-		local status = Kit.create("TextLabel", {
-			Name = entry.CardName.."Status", Position = UDim2.fromOffset(14, 115), Size = UDim2.new(1, -28, 0, 28),
-			BackgroundTransparency = 1, FontFace = Kit.face("BuilderSans"), TextSize = 10, TextColor3 = Kit.FAINT,
-			TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = entry.Hint,
-		}, tile)
-		local character = characterLibrary and characterLibrary.Characters and characterLibrary.Characters[index]
-		local loading = false
-		ctx.Janitor.add(button.Activated:Connect(function()
-			if loading then return end
-			Kit.Click()
-			if not character then status.Text = "Character loader couldn’t load. Reopen Rift to retry."; return end
-			loading = true; button.Text = "Opening…"
-			task.spawn(function()
-				local ok, err = characterLibrary.Execute(character)
-				loading = false
-				if tile.Parent then
-					button.Text = entry.ButtonText
-					if not ok then status.Text = tostring(err) end
-				end
-			end)
-		end))
-		ctx.Janitor.add(tile.MouseEnter:Connect(function() Kit.tween(rim, { Color = green, Transparency = 0.05 }, 0.14) end))
-		ctx.Janitor.add(tile.MouseLeave:Connect(function() Kit.tween(rim, { Color = Kit.BORDER, Transparency = 0.25 }, 0.14) end))
-	end
+	end))
+	ctx.Janitor.add(tile.MouseEnter:Connect(function() Kit.tween(rim, { Color = green, Transparency = 0.05 }, 0.14) end))
+	ctx.Janitor.add(tile.MouseLeave:Connect(function() Kit.tween(rim, { Color = Kit.BORDER, Transparency = 0.25 }, 0.14) end))
 	local function resize()
 		local width = cards.AbsoluteSize.X / math.max(ctx.Zoom.Scale, 0.01)
 		local columns = width >= 580 and 2 or 1
 		grid.CellSize = UDim2.new(1 / columns, columns == 2 and -6 or 0, 0, 156)
-		local rows=math.ceil(#entries/columns)
-		cards.Size=UDim2.new(1,0,0,rows*156+math.max(0,rows-1)*12)
 	end
 	ctx.Janitor.add(cards:GetPropertyChangedSignal("AbsoluteSize"):Connect(resize))
 	ctx.Janitor.add(ctx.Zoom:GetPropertyChangedSignal("Scale"):Connect(resize))
@@ -862,7 +850,7 @@ local function buildSettings(panel, ctx)
 			executorName = identifyexecutor()
 		end
 	end)
-	Kit.PlainRow(about, "Version", "2.4.0")
+	Kit.PlainRow(about, "Version", "2.4.1")
 	Kit.PlainRow(about, "Created by", "N0VA_0100")
 	Kit.PlainRow(about, "Executor", executorName)
 	Kit.PlainRow(about, "Place", ctx.PlaceName)
