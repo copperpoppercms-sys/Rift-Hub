@@ -80,7 +80,7 @@ local function loadModule(path)
 	return result
 end
 
-local Rift = {Game="Rift Hub",Version="2.4.1"}
+local Rift = {Game="Rift Hub",Version="2.5.0"}
 Rift.Utils = loadModule("src/core/Utils.lua")
 Rift.Config = loadModule("src/core/Config.lua")
 

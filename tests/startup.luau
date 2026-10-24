@@ -54,7 +54,7 @@ end
 env.__RiftHubLoaded=true
 env.RiftHulkCharacter={Unload=function() characterStops+=1;env.RiftHulkCharacter=nil end}
 local app=run()
-assert(app and app.Game=='Rift Hub' and app.Version=='2.4.1' and app.Hub.Gui.Parent)
+assert(app and app.Game=='Rift Hub' and app.Version=='2.5.0' and app.Hub.Gui.Parent)
 assert(opened==1 and characterStops==1 and launches==0 and env.__RiftHubLoaded,"stale loaded flag blocked main UI")
 local first=app
 app=run()

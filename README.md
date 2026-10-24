@@ -55,10 +55,14 @@ The main execution snippet opens the universal **Rift Hub** window and returns i
 
 Re-executing the main entry unloads the previous Rift UI and active Rift game/character APIs, then opens the main UI again. A stale `__RiftHubLoaded` flag cannot suppress startup. Failed startup cleans up partially constructed features, and an older in-flight startup cannot overwrite a newer one. Existing intro source and media remain preserved, with the intro disabled.
 
-No Spider-Man/web-swing loader is present in this repository or the Hulk entrypoint. If an unrelated script was executed separately in the same Roblox session, rejoin once to stop its untracked background callbacks, then use the main snippet above. The exact loader used and live UI are still needed to confirm why that separate UI appeared.
+Main startup opens only the Rift UI. The separate Spider-Man card launches its installed Studio client only on request; it does not run automatically when the main hub opens.
 
 `tests/run_startup.py` checks main-only startup, stale state, reload, constructor failure, superseded startup and rejection of a wrong main response. `tests/run_game_library.py` also checks that wrong Hulk source is refused before executing or closing the main window.
 
 ### Superhero Arena update
 
-The Superhero Arena card launches the animated Rift interface with Auto Farm, Fast Attack, low-health retreat and speed controls. Spider-Man has been removed from the hub's character list and forwarding loaders. Existing standalone files in its separate repository are retained.
+The Superhero Arena card launches the animated Rift interface with Auto Farm, Fast Attack, low-health retreat and speed controls. The separate Spider-Man Studio system is available from Hero / Villain after its server/client package is installed in your experience.
+
+### Spider-Man reference system
+
+Hero / Villain includes Spider-Man beside Hulk again, linked to its separate [reference-driven Studio package](https://github.com/copperpoppercms-sys/Rift-Hub-spiderman). Install its server/client package in your own experience first. The launcher checks that prerequisite before closing the hub. The main hub does not auto-launch a character.

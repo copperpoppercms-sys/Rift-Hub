@@ -35,8 +35,14 @@ local HULK_CHARACTER = {
 	Url = "https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-Hulk/main/main.lua",
 }
 
+local SPIDERMAN_CHARACTER = {
+ Id="spiderman-character",Name="Spider-Man",ShortName="Spider-Man",Universal=true,RequiresPackage="RiftSpider",
+ SourceHeader="-- RiftHub-Entry: spiderman-character",ChunkName="RiftHubSpiderMan/main.lua",
+ Url="https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-spiderman/main/main.lua",
+}
+
 return function(ctx)
-	local M = { Games = { MM2, SUPERHERO, HULK }, Characters = { HULK_CHARACTER }, Status = "Ready" }
+	local M = { Games = { MM2, SUPERHERO, HULK }, Characters = { HULK_CHARACTER, SPIDERMAN_CHARACTER }, Status = "Ready" }
 	local busy, disposed = false, false
 	local function cleanupGame(item)
 		local env = type(getgenv) == "function" and getgenv() or _G
@@ -44,8 +50,8 @@ return function(ctx)
 			if type(env.MONO_Unload) == "function" then pcall(env.MONO_Unload) end
 			if type(env.RiftMM2StartupCleanup) == "function" then pcall(env.RiftMM2StartupCleanup) end
 		else
-			local key = item.Id == "hulk-character" and "RiftHulkCharacter" or item.Id == "survive-the-hulk" and "RiftHulkHub" or "SuperheroArenaHub"
-			local name = item.Id == "hulk-character" and "RiftHulkLeap" or item.Id == "survive-the-hulk" and "RiftSurviveTheHulk" or "RiftAutoPlay"
+			local key = item.Id == "spiderman-character" and "RiftSpiderMan" or item.Id == "hulk-character" and "RiftHulkCharacter" or item.Id == "survive-the-hulk" and "RiftHulkHub" or "SuperheroArenaHub"
+			local name = item.Id == "spiderman-character" and "RiftSpiderMan" or item.Id == "hulk-character" and "RiftHulkLeap" or item.Id == "survive-the-hulk" and "RiftSurviveTheHulk" or "RiftAutoPlay"
 			if type(env[key]) == "table" and type(env[key].Unload) == "function" then pcall(env[key].Unload) end
 			-- Also remove a window created before a startup error prevented API publication.
 			pcall(function()
@@ -69,6 +75,13 @@ return function(ctx)
 		if not known then return false, "Unknown game" end
 		if not item.Universal and game.PlaceId ~= item.PlaceId and game.GameId ~= item.UniverseId then
 			M.Status = "Open " .. item.Name .. " first"; return false, M.Status
+		end
+		if item.RequiresPackage then
+			local package=game:GetService("ReplicatedStorage"):FindFirstChild(item.RequiresPackage)
+			if not package or not package:FindFirstChild("Command") or not package:FindFirstChild("Client") then
+				M.Status="Install the Spider-Man Studio server/client package in this experience first"
+				return false,M.Status
+			end
 		end
 		busy = true; M.Status = "Fetching script…"
 		local ok, source = pcall(function() return game:HttpGet(item.Url .. "?cb=" .. tostring(os.time())) end)
