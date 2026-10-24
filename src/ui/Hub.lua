@@ -275,7 +275,7 @@ local function buildHeroVillain(panel, ctx)
 		{Name="Hulk",CardName="HulkCard",Initial="H",Description="huge rage",ButtonText="Exterminate",Hint="Hold-to-charge leap",
 		 Color=Color3.fromRGB(106,194,119),ButtonColor=Color3.fromRGB(50,107,64),File="RiftHub/hulk-portrait-a6c682101a76.jpg",
 		 ImageUrl="https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub/main/assets/hulk_portrait.jpg"},
-		{Name="Spider-Man",CardName="SpiderManCard",Initial="S",Description="video-reference traversal",ButtonText="Execute",Hint="Studio server package required",
+		{Name="Spider-Man",CardName="SpiderManCard",Initial="S",Description="web swing · wall crawl · power leap",ButtonText="Execute",Hint="Standalone · client-side movement",
 		 Color=Color3.fromRGB(237,79,96),ButtonColor=Color3.fromRGB(146,35,53),File="RiftHub/spiderman-portrait-v1.jpg",
 		 ImageUrl="https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-spiderman/main/assets/spiderman_portrait.jpg"},
 	}

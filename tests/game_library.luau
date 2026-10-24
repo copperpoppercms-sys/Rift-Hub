@@ -233,16 +233,8 @@ print("PASS: main-window slider and keybind handlers are disconnected on destruc
 -- Only the retained Hulk character is offered.
 m,state=controller();assert(#m.Characters==2 and m.Characters[1].Name=='Hulk')
 
--- Video-reference Spider-Man requires the installed server package before main is closed.
-local service=game.GetService;local installed=false
-local package={FindFirstChild=function(_,name) return (name=="Command" or name=="Client") and {} or nil end}
-function game:GetService(name)
- if name=="ReplicatedStorage" then return {FindFirstChild=function(_,key) return installed and key=="RiftSpider" and package or nil end} end
- return service(self,name)
-end
-m,state=controller();assert(m.Characters[2].RequiresPackage=="RiftSpider")
-assert(not m.Execute(m.Characters[2]));closed,restarted,open=state();assert(closed==0 and open)
-installed=true
+-- Standalone Spider-Man launches without any installed Studio package.
+m,state=controller();assert(m.Characters[2].RequiresPackage==nil)
 source="-- RiftHub-Entry: spiderman-character\nreturn {Game='Spider-Man',Gui={Parent=true}}"
 m,state=controller();assert(m.Execute(m.Characters[2]));closed,restarted,open=state();assert(closed==1 and not open)
 source="-- RiftHub-Entry: hulk-character\nreturn {Game='Hulk',Gui={Parent=true}}"
@@ -251,4 +243,4 @@ local cleaned=0;env.RiftSpiderMan={Unload=function() cleaned+=1 end}
 source="-- RiftHub-Entry: spiderman-character\nerror('Spider failed')"
 m,state=controller();assert(not m.Execute(m.Characters[2]) and cleaned==1)
 closed,restarted,open=state();assert(closed==1 and restarted==1 and open)
-print("PASS: Spider-Man package prerequisite, handoff, source identity and rollback.")
+print("PASS: Spider-Man standalone launch without package, source identity and rollback.")

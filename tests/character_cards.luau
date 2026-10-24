@@ -37,5 +37,5 @@ local cards=objects.CharacterCards
 assert(cards.Size.Y.Offset==156,'wide character grid height wrong')
 cards.AbsoluteSize.X=320;cards.Changed:Fire()
 assert(cards.Size.Y.Offset==324,'narrow grid clips second card')
-assert(objects.SpiderManCardStatus.Text=='Studio server package required','wrong handoff text')
+assert(objects.SpiderManCardStatus.Text=='Standalone · client-side movement','wrong handoff text')
 print('PASS: separate character cards, correct Execute routing, narrow-screen rows and Hulk button preserved.')

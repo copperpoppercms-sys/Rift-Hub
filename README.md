@@ -66,3 +66,6 @@ The Superhero Arena card launches the animated Rift interface with Auto Farm, Fa
 ### Spider-Man reference system
 
 Hero / Villain includes Spider-Man beside Hulk again, linked to its separate [reference-driven Studio package](https://github.com/copperpoppercms-sys/Rift-Hub-spiderman). Install its server/client package in your own experience first. The launcher checks that prerequisite before closing the hub. The main hub does not auto-launch a character.
+
+
+Spider-Man 2.1: Hero / Villain → Execute now opens the standalone executor controller, with no Studio package check. Procedural poses/webs are local; server movement acceptance is game-dependent. The separate Spider-Man repo retains its optional Studio client/server package.

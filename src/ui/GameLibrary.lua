@@ -36,7 +36,7 @@ local HULK_CHARACTER = {
 }
 
 local SPIDERMAN_CHARACTER = {
- Id="spiderman-character",Name="Spider-Man",ShortName="Spider-Man",Universal=true,RequiresPackage="RiftSpider",
+ Id="spiderman-character",Name="Spider-Man",ShortName="Spider-Man",Universal=true,
  SourceHeader="-- RiftHub-Entry: spiderman-character",ChunkName="RiftHubSpiderMan/main.lua",
  Url="https://raw.githubusercontent.com/copperpoppercms-sys/Rift-Hub-spiderman/main/main.lua",
 }
@@ -75,13 +75,6 @@ return function(ctx)
 		if not known then return false, "Unknown game" end
 		if not item.Universal and game.PlaceId ~= item.PlaceId and game.GameId ~= item.UniverseId then
 			M.Status = "Open " .. item.Name .. " first"; return false, M.Status
-		end
-		if item.RequiresPackage then
-			local package=game:GetService("ReplicatedStorage"):FindFirstChild(item.RequiresPackage)
-			if not package or not package:FindFirstChild("Command") or not package:FindFirstChild("Client") then
-				M.Status="Install the Spider-Man Studio server/client package in this experience first"
-				return false,M.Status
-			end
 		end
 		busy = true; M.Status = "Fetching script…"
 		local ok, source = pcall(function() return game:HttpGet(item.Url .. "?cb=" .. tostring(os.time())) end)
